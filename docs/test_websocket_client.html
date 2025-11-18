@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test WebSocket - Notifications Samaconso</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .connection-panel {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .connection-panel.connected {
+            border-color: #4CAF50;
+            background-color: #f1f8e9;
+        }
+        
+        .connection-panel.disconnected {
+            border-color: #f44336;
+            background-color: #ffebee;
+        }
+        
+        input[type="text"], input[type="number"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+            margin: 5px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .btn-warning {
+            background-color: #ffc107;
+            color: black;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        button:hover {
+            opacity: 0.8;
+        }
+        
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f8f9fa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .message.connection { background-color: #d4edda; color: #155724; }
+        .message.notification { background-color: #fff3cd; color: #856404; }
+        .message.error { background-color: #f8d7da; color: #721c24; }
+        .message.info { background-color: #cce7ff; color: #004085; }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .status.connected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .status.disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .notification-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 5px 0;
+            position: relative;
+        }
+        
+        .notification-item.unread {
+            border-left: 4px solid #007bff;
+        }
+        
+        .notification-item.read {
+            opacity: 0.6;
+            border-left: 4px solid #6c757d;
+        }
+        
+        .notification-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .notification-body {
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .notification-meta {
+            font-size: 11px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔔 Test WebSocket - Notifications Samaconso</h1>
+        <p>Interface de test pour les notifications en temps réel</p>
+    </div>
+
+    <div class="container">
+        <div class="connection-panel" id="connectionPanel">
+            <h3>🔗 Connexion WebSocket</h3>
+            <div>
+                <label>User ID:</label>
+                <input type="number" id="userId" value="1" placeholder="ID utilisateur">
+                
+                <label>JWT Token:</label>
+                <input type="text" id="jwtToken" placeholder="Votre JWT token" style="width: 400px;">
+            </div>
+            <div style="margin-top: 10px;">
+                <button class="btn-success" onclick="connectWebSocket()">Se connecter</button>
+                <button class="btn-danger" onclick="disconnectWebSocket()">Se déconnecter</button>
+                <span id="connectionStatus" class="status disconnected">Déconnecté</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>⚡ Actions</h3>
+        <button class="btn-primary" onclick="sendPing()">🏓 Ping</button>
+        <button class="btn-primary" onclick="requestNotifications()">📬 Demander notifications</button>
+        <button class="btn-warning" onclick="clearMessages()">🗑️ Vider messages</button>
+        
+        <div style="margin-top: 10px;">
+            <input type="number" id="notifIdToRead" placeholder="ID notification à marquer lue">
+            <button class="btn-secondary" onclick="markAsRead()">✅ Marquer comme lue</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📨 Messages WebSocket</h3>
+        <div id="messages" class="messages"></div>
+    </div>
+
+    <div class="container">
+        <h3>📋 Notifications reçues</h3>
+        <div id="notifications" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+        let notifications = new Map();
+
+        function log(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const statusElement = document.getElementById('connectionStatus');
+            const panelElement = document.getElementById('connectionPanel');
+            
+            if (connected) {
+                statusElement.className = 'status connected';
+                statusElement.textContent = 'Connecté';
+                panelElement.className = 'connection-panel connected';
+            } else {
+                statusElement.className = 'status disconnected';
+                statusElement.textContent = 'Déconnecté';
+                panelElement.className = 'connection-panel disconnected';
+            }
+        }
+
+        function connectWebSocket() {
+            const userId = document.getElementById('userId').value;
+            const token = document.getElementById('jwtToken').value;
+
+            if (!userId || !token) {
+                alert('Veuillez saisir l\'ID utilisateur et le token JWT');
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Déjà connecté', 'error');
+                return;
+            }
+
+            const wsUrl = `ws://localhost:8000/notifications/ws/${userId}?token=${token}`;
+            log(`Tentative de connexion à: ${wsUrl}`, 'info');
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                updateConnectionStatus(true);
+                log('✅ Connexion WebSocket ouverte', 'connection');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    log(`❌ Erreur parsing JSON: ${e.message}`, 'error');
+                }
+            };
+
+            ws.onclose = function(event) {
+                updateConnectionStatus(false);
+                log(`🔌 Connexion fermée (Code: ${event.code}, Raison: ${event.reason})`, 'connection');
+            };
+
+            ws.onerror = function(error) {
+                log(`❌ Erreur WebSocket: ${error}`, 'error');
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                updateConnectionStatus(false);
+                log('🔌 Déconnexion demandée', 'info');
+            }
+        }
+
+        function handleMessage(data) {
+            const type = data.type || 'unknown';
+            const timestamp = data.timestamp || new Date().toISOString();
+
+            log(`📨 Message reçu: ${type}`, 'info');
+
+            switch (type) {
+                case 'connection_confirmed':
+                    log(`✅ Connexion confirmée pour l'utilisateur ${data.user_id}`, 'connection');
+                    break;
+
+                case 'initial_notifications':
+                    const notifs = data.notifications || [];
+                    const count = data.count || 0;
+                    log(`📋 ${count} notifications reçues`, 'notification');
+                    
+                    // Afficher les notifications
+                    notifs.forEach(notif => {
+                        notifications.set(notif.id, notif);
+                    });
+                    updateNotificationsDisplay();
+                    break;
+
+                case 'new_notification':
+                    const notification = data.notification;
+                    log(`🔔 Nouvelle notification: ${notification.title}`, 'notification');
+                    notifications.set(notification.id, notification);
+                    updateNotificationsDisplay();
+                    break;
+
+                case 'no_notifications':
+                    log('📭 Aucune notification non lue', 'info');
+                    break;
+
+                case 'notification_marked_read':
+                    const notifId = data.notification_id;
+                    log(`✅ Notification ${notifId} marquée comme lue`, 'info');
+                    
+                    // Mettre à jour localement
+                    if (notifications.has(notifId)) {
+                        notifications.get(notifId).is_read = true;
+                        updateNotificationsDisplay();
+                    }
+                    break;
+
+                case 'pong':
+                    log('🏓 Pong reçu', 'info');
+                    break;
+
+                case 'error':
+                    const errorMsg = data.message || 'Erreur inconnue';
+                    log(`⚠️ Erreur: ${errorMsg}`, 'error');
+                    break;
+
+                default:
+                    log(`❓ Type de message inconnu: ${JSON.stringify(data)}`, 'error');
+            }
+        }
+
+        function updateNotificationsDisplay() {
+            const container = document.getElementById('notifications');
+            container.innerHTML = '';
+
+            if (notifications.size === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">Aucune notification</p>';
+                return;
+            }
+
+            // Trier par date (plus récentes en premier)
+            const sortedNotifs = Array.from(notifications.values()).sort((a, b) => {
+                return new Date(b.created_at) - new Date(a.created_at);
+            });
+
+            sortedNotifs.forEach(notif => {
+                const div = document.createElement('div');
+                div.className = `notification-item ${notif.is_read ? 'read' : 'unread'}`;
+                
+                div.innerHTML = `
+                    <div class="notification-title">${notif.title}</div>
+                    <div class="notification-body">${notif.body}</div>
+                    <div class="notification-meta">
+                        ID: ${notif.id} | 
+                        Type: ${notif.type_notification_id} | 
+                        Date: ${notif.created_at} | 
+                        ${notif.is_read ? 'Lue' : 'Non lue'}
+                        ${!notif.is_read ? `<button onclick="markNotificationRead(${notif.id})" style="margin-left: 10px; font-size: 10px;">Marquer lue</button>` : ''}
+                    </div>
+                `;
+                
+                container.appendChild(div);
+            });
+        }
+
+        function sendMessage(message) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket non connecté', 'error');
+                return false;
+            }
+
+            try {
+                ws.send(JSON.stringify(message));
+                return true;
+            } catch (e) {
+                log(`❌ Erreur envoi message: ${e.message}`, 'error');
+                return false;
+            }
+        }
+
+        function sendPing() {
+            if (sendMessage({
+                type: 'ping',
+                timestamp: new Date().toISOString()
+            })) {
+                log('🏓 Ping envoyé', 'info');
+            }
+        }
+
+        function requestNotifications() {
+            if (sendMessage({ type: 'request_notifications' })) {
+                log('📬 Demande de notifications envoyée', 'info');
+            }
+        }
+
+        function markAsRead() {
+            const notifId = document.getElementById('notifIdToRead').value;
+            if (!notifId) {
+                alert('Veuillez saisir un ID de notification');
+                return;
+            }
+
+            markNotificationRead(parseInt(notifId));
+        }
+
+        function markNotificationRead(notifId) {
+            if (sendMessage({
+                type: 'mark_read',
+                notification_id: notifId
+            })) {
+                log(`✅ Demande de marquage notification ${notifId} envoyée`, 'info');
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Initialiser l'interface
+        updateConnectionStatus(false);
+        log('🚀 Interface WebSocket initialisée', 'info');
+        log('💡 Conseil: Obtenez votre JWT token en vous connectant à l\'API (POST /auth/login)', 'info');
+    </script>
+</body>
+</html>

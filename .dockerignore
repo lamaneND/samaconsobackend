@@ -1,0 +1,70 @@
+# Fichiers et dossiers à ignorer lors de la construction Docker
+
+# Environnements virtuels Python
+venv/
+env/
+.env
+.venv
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE et éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Cache et builds
+.cache/
+dist/
+build/
+*.egg-info/
+
+# Fichiers de configuration locaux
+.env.local
+.env.development
+.env.production
+
+# Base de données locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificats et clés
+*.pem
+*.key
+*.crt
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Fichiers de backup
+*.bak
+*.backup

@@ -1,0 +1,97 @@
+.gitattributes
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Pyre type checker
+.pyre/
+
+# mypy
+.mypy_cache/
+
+# Pydantic compiled cache
+__pydantic__/ 
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# FastAPI
+instance/
+*.db
+*.sqlite3
+
+# Alembic
+alembic/versions/*.pyc
+alembic/versions/__pycache__/
+
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# Docker
+*.log
+*.pid
+docker-compose.override.yml
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log
+*.bak
+*.tmp
+
+# Local dev
+local_settings.py
+
+# Certificates (security - do not commit)
+certificates/*.pfx
+certificates/*.p12
+certificates/*.key
+certificates/*.pem
+!certificates/README.md
