@@ -137,12 +137,12 @@ async def on_startup() -> None:
         main_logger.error(f"❌ Redis initialization failed: {e}")
         raise
 
-    # RabbitMQ temporairement désactivé
-    # try:
-    #     await init_rabbitmq()
-    #     main_logger.info("✅ RabbitMQ connection initialized successfully")
-    # except Exception as e:
-    #     main_logger.warning(f"⚠️ RabbitMQ non disponible, continuons sans: {e}")
+    # RabbitMQ (Réactivé pour la production)
+    try:
+        await init_rabbitmq()
+        main_logger.info("✅ RabbitMQ connection initialized successfully")
+    except Exception as e:
+        main_logger.warning(f"⚠️ RabbitMQ non disponible, continuons sans: {e}")
 
     # Initialisation MinIO
     try:

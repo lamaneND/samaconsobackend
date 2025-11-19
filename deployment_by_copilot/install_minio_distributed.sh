@@ -53,7 +53,7 @@ MINIO_OPTS="--console-address :9001 --address :9000"
 
 # Identifiants Root
 MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=Senelec2024!
+MINIO_ROOT_PASSWORD=$3N3l3cMinio2025
 
 # Pour le mode distribué, ajouter après le premier démarrage:
 # MINIO_VOLUMES="http://10.101.1.212:9000/data/minio http://10.101.1.210:9000/data/minio http://10.101.1.211:9000/data/minio"

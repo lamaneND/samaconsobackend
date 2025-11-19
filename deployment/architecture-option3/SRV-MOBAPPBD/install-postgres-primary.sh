@@ -72,7 +72,7 @@ systemctl start postgresql
 # Créer la base de données et les utilisateurs
 sudo -u postgres psql << EOF
 -- Créer l'utilisateur application
-CREATE USER samaconso_app WITH PASSWORD 'Senelec2024!';
+CREATE USER samaconso_app WITH PASSWORD '$3N3l3c2025!';
 
 -- Créer l'utilisateur de réplication
 CREATE USER replicator WITH REPLICATION PASSWORD 'Replicator2024!';
@@ -101,7 +101,7 @@ cp "$SCRIPT_DIR/pgbouncer.ini" /etc/pgbouncer/pgbouncer.ini
 # Créer le fichier d'authentification PgBouncer
 mkdir -p /etc/pgbouncer
 PG_PASSWORD_HASH=$(echo -n 'postgres' + 's3n3l3c123' | md5sum | cut -d' ' -f1)
-APP_PASSWORD_HASH=$(echo -n 'samaconso_app' + 'Senelec2024!' | md5sum | cut -d' ' -f1)
+APP_PASSWORD_HASH=$(echo -n 'samaconso_app' + '$3N3l3c2025!' | md5sum | cut -d' ' -f1)
 
 cat > /etc/pgbouncer/userlist.txt << EOF
 "postgres" "md5${PG_PASSWORD_HASH}"

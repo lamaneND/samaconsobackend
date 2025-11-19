@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 import sqlalchemy.orm as _orm
 import pyodbc
 from typing import Annotated
+import os
 
+# Utilisation de la variable d'environnement DATABASE_URL si elle existe (Production)
+# Sinon fallback sur la configuration de développement
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:s3n3l3c123@10.101.1.171:5432/samaconso")
 
-DATABASE_URL = "postgresql://postgres:s3n3l3c123@10.101.1.171:5432/samaconso"
-#DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/samaconso"
 engine = _sql.create_engine(DATABASE_URL)
 # engine = _sql.create_engine(DATABASE_URL,  pool_size=20,     
 #     max_overflow=30,   

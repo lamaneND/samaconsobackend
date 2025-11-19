@@ -3,7 +3,7 @@
 ## Architecture
 
 ### SRV-MOBAPPBD (10.101.1.212)
-- PostgreSQL 15 PRIMARY (natif) + PgBouncer
+- PostgreSQL 17 PRIMARY (natif) + PgBouncer
 - MinIO Node 1 (natif, distribué)
 
 ### SRV-MOBAPP1 (10.101.1.210)

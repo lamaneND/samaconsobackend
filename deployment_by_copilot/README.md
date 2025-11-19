@@ -5,7 +5,7 @@ Ce guide implémente l'architecture "Option 3" validée, enrichie avec Keepalive
 ## Architecture Finale
 
 *   **SRV-MOBAPPBD (10.101.1.212)**
-    *   PostgreSQL 15 (Master) + PgBouncer
+    *   PostgreSQL 17 (Master) + PgBouncer
     *   MinIO Node 1 (Distribué)
 *   **SRV-MOBAPP1 (10.101.1.210)**
     *   API (Gunicorn) + Celery Worker (High Priority)

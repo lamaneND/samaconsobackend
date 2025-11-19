@@ -6,6 +6,7 @@ version: '3.8'
 services:
   # --- Application ---
   api:
+    build: .
     image: samaconso_api:latest
     container_name: samaconso_api
     command: gunicorn -w 9 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --timeout 120
@@ -14,12 +15,12 @@ services:
     env_file:
       - .env.production
     environment:
-      - DATABASE_URL=postgresql://samaconso_app:Senelec2024!@10.101.1.212:6432/samaconso
+      - DATABASE_URL=postgresql://samaconso_app:S3N3l3c2025!@10.101.1.212:6432/samaconso
       # Pointe vers le Redis Master sur SRV1
       - REDIS_URL=redis://10.101.1.210:6379/0
       # Cluster RabbitMQ
-      - RABBITMQ_URL=amqp://admin:Senelec2024!@10.101.1.210:5672/
-      - CELERY_BROKER_URL=amqp://admin:Senelec2024!@10.101.1.210:5672/
+      - RABBITMQ_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
+      - CELERY_BROKER_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
       - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
       - MINIO_ENDPOINT=10.101.1.212:9000,10.101.1.210:9000,10.101.1.211:9000
       - SERVER_NAME=SRV-MOBAPP2

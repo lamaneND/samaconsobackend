@@ -45,5 +45,5 @@ echo "=========================================="
 echo "Cluster RabbitMQ configuré avec succès!"
 echo "=========================================="
 echo "Accédez à la console: http://10.101.1.210:15672"
-echo "Utilisateur: admin / Mot de passe: Senelec2024!"
+echo "Utilisateur: admin / Mot de passe: S3N3l3c2025!"
 
