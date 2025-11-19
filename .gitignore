@@ -96,3 +96,6 @@ certificates/*.p12
 certificates/*.key
 certificates/*.pem
 !certificates/README.md
+
+# Firebase credentials
+app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
