@@ -2,6 +2,7 @@
 SECRET_KEY = "$3?N2LEC123"  
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7  # Refresh token valide 7 jours
 
 ### Firebase Cloud Messaging
 

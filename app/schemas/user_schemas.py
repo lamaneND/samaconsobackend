@@ -66,8 +66,9 @@ class UserSendSmsSchema(BaseModel):
     message: str
     
 class Token(BaseModel):
-    access_token:str
-    token_type:str
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -78,6 +79,18 @@ class TokenData(BaseModel):
 class UserLogoutSchema(BaseModel):
     user_id:Optional[int]=None
     fcmToken: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class RefreshTokenSchema(BaseModel):
+    refresh_token: str
+    
+    class Config:
+        from_attributes = True
+
+class RefreshTokenOptionalSchema(BaseModel):
+    refresh_token: Optional[str] = None
     
     class Config:
         from_attributes = True

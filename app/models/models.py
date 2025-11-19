@@ -96,6 +96,8 @@ class  UserSession(Base):
     user_id = Column(Integer, ForeignKey("user.id"))
     device_model  = Column(String,nullable=True)
     fcm_token = Column(String,nullable=True)
+    refresh_token_hash = Column(String,nullable=True)  # Hash du refresh token pour sécurité
+    refresh_token_expires_at = Column(DateTime(timezone=True),nullable=True)  # Date d'expiration du refresh token
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime, default=datetime.now())
     

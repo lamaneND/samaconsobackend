@@ -1,0 +1,67 @@
+# Configuration Docker Compose pour SRV-MOBAPP2 (10.101.1.211)
+# Rôles : API, Redis Replica, RabbitMQ Node 2, MinIO Node 3
+
+version: '3.8'
+
+services:
+  # --- Application ---
+  api:
+    image: samaconso_api:latest
+    container_name: samaconso_api
+    command: gunicorn -w 9 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --timeout 120
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.production
+    environment:
+      - DATABASE_URL=postgresql://samaconso_app:Senelec2024!@10.101.1.212:6432/samaconso
+      # Pointe vers le Redis Master sur SRV1
+      - REDIS_URL=redis://10.101.1.210:6379/0
+      # Cluster RabbitMQ
+      - RABBITMQ_URL=amqp://admin:Senelec2024!@10.101.1.210:5672/
+      - CELERY_BROKER_URL=amqp://admin:Senelec2024!@10.101.1.210:5672/
+      - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
+      - MINIO_ENDPOINT=10.101.1.212:9000,10.101.1.210:9000,10.101.1.211:9000
+      - SERVER_NAME=SRV-MOBAPP2
+    restart: unless-stopped
+    extra_hosts:
+      - "srv-mobappbd:10.101.1.212"
+      - "srv-mobapp1:10.101.1.210"
+
+  worker_low:
+    image: samaconso_api:latest
+    container_name: samaconso_worker_low
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q default,low -n worker_low@%h
+    env_file: .env.production
+    restart: unless-stopped
+
+  # --- Infrastructure ---
+  redis_replica:
+    image: redis:7-alpine
+    container_name: samaconso_redis_replica
+    # Réplication du Master sur SRV1
+    command: redis-server --replicaof 10.101.1.210 6379 --replica-announce-ip 10.101.1.211
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: samaconso_rabbitmq
+    hostname: rabbitmq2
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "4369:4369"
+      - "25672:25672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SenelecSecretCookie"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: always
+
+volumes:
+  redis_data:
+  rabbitmq_data:

@@ -1,0 +1,124 @@
+# Configuration Docker Compose pour les serveurs d'application
+# SRV-MOBAPP1 (10.101.1.210) et SRV-MOBAPP2 (10.101.1.211)
+# Services: API FastAPI + Celery Worker
+
+version: '3.8'
+
+services:
+  # Application FastAPI
+  api:
+    image: samaconso_api:with-fixes
+    container_name: samaconso_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.production
+    environment:
+      # Base de données PostgreSQL (sur SRV-MOBAPPBD)
+      - DATABASE_URL=postgresql://postgres:s3n3l3c123@10.101.1.57:5432/samaconso
+      # Redis (sur SRV-MOBAPPBD)
+      - REDIS_URL=redis://10.101.1.57:6379/0
+      # RabbitMQ (sur SRV-MOBAPPBD)
+      - RABBITMQ_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_BROKER_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_RESULT_BACKEND=redis://10.101.1.57:6379/0
+      # MinIO (sur SRV-MOBAPPBD)
+      - MINIO_ENDPOINT=10.101.1.57:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-Senelec2024!}
+      - MINIO_SECURE=false
+      # Variables Firebase
+      - FIREBASE_CREDENTIALS_PATH=/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+      # Configuration serveur (pour identifier l'instance)
+      - SERVER_NAME=${SERVER_NAME:-SRV-MOBAPP1}
+      - SERVER_IP=${SERVER_IP:-10.101.1.210}
+    volumes:
+      - ./uploaded_files:/app/uploaded_files
+      - ./logs:/app/logs
+      - ./app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Configuration réseau pour accéder aux serveurs SQL internes
+    extra_hosts:
+      - "srv-asreports:10.101.2.87"   # IP du serveur SIC
+      - "srv-commercial:10.101.3.243" # IP du serveur Postpaid
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4'
+        reservations:
+          memory: 2G
+          cpus: '2'
+    networks:
+      - samaconso_network
+
+  # Worker Celery pour les tâches de notifications
+  celery_worker:
+    image: samaconso_celery_worker:with-fixes
+    container_name: samaconso_celery_worker
+    command: celery -A app.celery_app worker --loglevel=info --pool=prefork -n worker@${SERVER_NAME:-SRV-MOBAPP1} --concurrency=4 -Q urgent,high_priority,normal,low_priority
+    env_file:
+      - .env.production
+    environment:
+      # Base de données PostgreSQL (sur SRV-MOBAPPBD)
+      - DATABASE_URL=postgresql://postgres:s3n3l3c123@10.101.1.57:5432/samaconso
+      # Redis (sur SRV-MOBAPPBD)
+      - REDIS_URL=redis://10.101.1.57:6379/0
+      # RabbitMQ (sur SRV-MOBAPPBD)
+      - RABBITMQ_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_BROKER_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_RESULT_BACKEND=redis://10.101.1.57:6379/0
+      # Variables Firebase
+      - FIREBASE_CREDENTIALS_PATH=/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+      # Configuration serveur
+      - SERVER_NAME=${SERVER_NAME:-SRV-MOBAPP1}
+    volumes:
+      - ./logs:/app/logs
+      - ./app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:ro
+    restart: unless-stopped
+    extra_hosts:
+      - "srv-asreports:10.101.2.87"   # IP du serveur SIC
+      - "srv-commercial:10.101.3.243" # IP du serveur Postpaid
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4'
+        reservations:
+          memory: 2G
+          cpus: '2'
+    networks:
+      - samaconso_network
+
+  # Flower pour monitoring Celery (optionnel - seulement sur SRV-MOBAPP1)
+  flower:
+    image: samaconso_api:with-fixes
+    container_name: samaconso_flower
+    command: celery -A app.celery_app flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASS:-Senelec2024!}
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env.production
+    environment:
+      - REDIS_URL=redis://10.101.1.57:6379/0
+      - RABBITMQ_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_BROKER_URL=amqp://admin:Senelec2024!@10.101.1.57:5672/
+      - CELERY_RESULT_BACKEND=redis://10.101.1.57:6379/0
+    restart: unless-stopped
+    networks:
+      - samaconso_network
+    profiles:
+      - monitoring  # Désactiver sur SRV-MOBAPP2 avec --profile monitoring
+
+networks:
+  samaconso_network:
+    driver: bridge
+

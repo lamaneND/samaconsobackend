@@ -188,6 +188,12 @@ async def hello_world():
     return {"message":"SAMA CONSO", "version": "2.0.0", "status": "running"}
 
 
+@app.get("/health")
+async def health_check():
+    """Endpoint de santé simple pour les health checks et load balancers"""
+    return {"status": "ok", "message": "SamaConso API is running", "version": "2.0.0"}
+
+
 @app.get("/health/redis")
 async def health_redis():
     try:
