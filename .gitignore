@@ -98,4 +98,21 @@ certificates/*.pem
 !certificates/README.md
 
 # Firebase credentials
+app/samaconso-firebase-adminsdk-*.json
+*.json
+
+# Uploads & Logs
+uploaded_files/
+logs/
+
+# Local & Production Secrets
+.env.*
+!.env.example
+deployment_by_copilot/app_servers/.env.production
+docker-compose.local.yml
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
