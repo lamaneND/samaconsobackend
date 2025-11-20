@@ -24,10 +24,16 @@ services:
       - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
       - MINIO_ENDPOINT=10.101.1.212:9000,10.101.1.210:9000,10.101.1.211:9000
       - SERVER_NAME=SRV-MOBAPP2
+    volumes:
+      - ./uploaded_files:/app/uploaded_files
+      - ./logs:/app/logs
+      - ./app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:ro
     restart: unless-stopped
     extra_hosts:
       - "srv-mobappbd:10.101.1.212"
       - "srv-mobapp1:10.101.1.210"
+      - "srv-asreports:10.101.2.87"
+      - "srv-commercial:10.101.3.243"
 
   worker_low:
     image: samaconso_api:latest
