@@ -98,8 +98,8 @@ certificates/*.pem
 !certificates/README.md
 
 # Firebase credentials
-app/samaconso-firebase-adminsdk-*.json
-*.json
+# app/samaconso-firebase-adminsdk-*.json
+# *.json
 
 # Uploads & Logs
 uploaded_files/
@@ -115,4 +115,4 @@ docker-compose.local.yml
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+# app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
