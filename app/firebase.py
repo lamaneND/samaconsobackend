@@ -19,8 +19,17 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 FIREBASE_CREDENTIALS_PATH = BASE_DIR / "samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json"
-cred = credentials.Certificate(str(FIREBASE_CREDENTIALS_PATH))
-firebase_admin.initialize_app(cred)
+
+FIREBASE_INITIALIZED = False
+try:
+    if FIREBASE_CREDENTIALS_PATH.exists() and FIREBASE_CREDENTIALS_PATH.is_file():
+        cred = credentials.Certificate(str(FIREBASE_CREDENTIALS_PATH))
+        firebase_admin.initialize_app(cred)
+        FIREBASE_INITIALIZED = True
+    else:
+        print(f"WARNING: Firebase credentials file not found at {FIREBASE_CREDENTIALS_PATH}. Notifications will be disabled.")
+except Exception as e:
+    print(f"ERROR: Failed to initialize Firebase: {e}")
 
 # ============= OPTIMISATION : Cache des credentials Firebase =============
 # Cache global pour éviter de recréer les credentials à chaque notification
@@ -38,6 +47,9 @@ def _get_cached_credentials():
     Récupère ou crée les credentials Firebase avec cache intelligent
     Réutilise le token tant qu'il est valide (évite 200-400ms par notification)
     """
+    if not FIREBASE_INITIALIZED:
+        raise Exception("Firebase not initialized (credentials missing)")
+
     with _credential_cache["lock"]:
         now = datetime.utcnow()
 
