@@ -57,7 +57,7 @@ services:
     environment:
       RABBITMQ_ERLANG_COOKIE: "SenelecSecretCookie"
       RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: S3N3l3c2025!
+      RABBITMQ_DEFAULT_PASS: Senelec2024!
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: always
