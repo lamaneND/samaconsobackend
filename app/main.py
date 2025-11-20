@@ -60,17 +60,18 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-os.environ["HTTP_PROXY"] = "http://10.101.201.204:8080"
-os.environ["HTTPS_PROXY"] = "http://10.101.201.204:8080"
-proxies = {
-    'http': 'http://10.101.201.204:8080',
-    'https': 'http://10.101.201.204:8080',
-}
-try:
-    r = requests.get("https://oauth2.googleapis.com/token",proxies=proxies,verify=False,timeout=10)
-    print("Connexion réussie")
-except Exception as e:
-    print("Erreur :", e)
+# Configuration Proxy (Désactivé en production si non nécessaire, ou à configurer via ENV)
+# os.environ["HTTP_PROXY"] = "http://10.101.201.204:8080"
+# os.environ["HTTPS_PROXY"] = "http://10.101.201.204:8080"
+# proxies = {
+#     'http': 'http://10.101.201.204:8080',
+#     'https': 'http://10.101.201.204:8080',
+# }
+# try:
+#     r = requests.get("https://oauth2.googleapis.com/token",proxies=proxies,verify=False,timeout=10)
+#     print("Connexion réussie")
+# except Exception as e:
+#     print("Erreur :", e)
 
 
 # Initialisation du système de logs

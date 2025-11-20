@@ -1,5 +1,5 @@
 # Multi-stage build pour optimiser la taille de l'image
-FROM python:3.10-slim AS builder
+FROM python:3.10-slim-bookworm AS builder
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --user -r requirements.txt
 
 # Production stage
-FROM python:3.10-slim
+FROM python:3.10-slim-bookworm
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -33,6 +33,7 @@ ENV ACCEPT_EULA=Y
 
 # ===== INSTALLATION DES DRIVERS SQL SERVER =====
 # Installation des dépendances système et des drivers Microsoft ODBC
+# Note: apt-key est déprécié, on utilise gpg --dearmor et signed-by
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg2 \
@@ -41,8 +42,8 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     unixodbc \
     unixodbc-dev \
-    && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
     && apt-get install -y mssql-tools18 \
