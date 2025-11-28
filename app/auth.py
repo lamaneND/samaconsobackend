@@ -1,6 +1,7 @@
 import logging
 import uuid
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import jwt
@@ -15,7 +16,7 @@ from app.database import get_db_samaconso
 from app.schemas.user_schemas import TokenData
 from ldap3 import SIMPLE, Server,Connection,ALL
 from app.config import LDAP_SEARCH_PASSWORD, LDAP_SEARCH_USER, LDAP_SERVER,LDAP_PORT,LDAP_BASE_DN,LDAP_USER_DN,LDAP_DOMAIN
-
+import bcrypt
 
 
 # Password hashing
@@ -26,11 +27,34 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 #Vérifier mot de passe
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # Try direct verification first (for backward compatibility with existing passwords)
+    # if pwd_context.verify(plain_password, hashed_password):
+    #     return True
+    
+    # # If direct verification fails, try with SHA-256 pre-hash (for passwords > 72 bytes)
+    # password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    # return pwd_context.verify(password_hash, hashed_password)
+    #return pwd_context.verify(plain_password, hashed_password)
+    #plain_password_bytes = plain_password.encode('utf-8')
     return pwd_context.verify(plain_password, hashed_password)
-
+   
 #Crypter mot de passe
 def get_password_hash(password: str) -> str:
+    # Pre-hash with SHA-256 to support passwords longer than 72 bytes (bcrypt limitation)
+    # This ensures all new passwords work regardless of length
+    # password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    # return pwd_context.hash(password_hash)
+    #return pwd_context.hash(password)
+    #password_bytes = password.encode('utf-8') 
     return pwd_context.hash(password)
+    # pwd_bytes = password.encode('utf-8')
+    # salt = bcrypt.gensalt()
+    # hashed = bcrypt.hashpw(pwd_bytes, salt)
+    
+    # # On retourne une string pour le stockage en base de données
+    # return hashed.decode('utf-8')
+ 
+
 
 #Créer token
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

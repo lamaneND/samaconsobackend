@@ -1,104 +1,133 @@
-# Déploiement SamaConso API
+# Guide de Déploiement Optimisé (Architecture Distribuée)
 
-Ce répertoire contient tous les fichiers nécessaires pour déployer l'application SamaConso sur 3 serveurs Ubuntu avec configuration de scalabilité.
+Ce guide implémente l'architecture "Option 3" validée, enrichie avec Keepalived pour la haute disponibilité.
 
-## Structure des Fichiers
+## Architecture Finale
 
-```
-deployment/
-├── docker-compose.db.yml          # Configuration Docker pour le serveur de base de données
-├── docker-compose.app.yml          # Configuration Docker pour les serveurs d'application
-├── nginx/
-│   └── nginx.conf                  # Configuration Nginx pour le load balancing
-├── scripts/
-│   ├── setup-db-server.sh          # Installation sur SRV-MOBAPPBD
-│   ├── setup-app-server.sh         # Installation sur SRV-MOBAPP1 et SRV-MOBAPP2
-│   ├── deploy-db.sh                # Déploiement sur SRV-MOBAPPBD
-│   ├── deploy-app.sh               # Déploiement sur les serveurs app
-│   ├── setup-nginx-lb.sh           # Configuration Nginx load balancer
-│   ├── health-check.sh             # Vérification de santé des services
-│   └── backup-db.sh                # Script de sauvegarde de la base de données
-├── env.db.template                 # Template variables d'environnement (DB)
-├── env.app.template                # Template variables d'environnement (App)
-├── GUIDE_DEPLOIEMENT.md            # Guide complet de déploiement
-└── README.md                       # Ce fichier
-```
+*   **SRV-MOBAPPBD (10.101.1.212)**
+    *   PostgreSQL 17 (Master) + PgBouncer
+    *   MinIO Node 1 (Distribué)
+*   **SRV-MOBAPP1 (10.101.1.210)**
+    *   API (Gunicorn) + Celery Worker (High Priority)
+    *   Redis (Master)
+    *   RabbitMQ (Node 1)
+    *   MinIO Node 2 (Distribué)
+    *   Nginx + Keepalived (Master VIP)
+*   **SRV-MOBAPP2 (10.101.1.211)**
+    *   API (Gunicorn) + Celery Worker (Low Priority)
+    *   Redis (Replica)
+    *   RabbitMQ (Node 2)
+    *   MinIO Node 3 (Distribué)
+    *   Nginx + Keepalived (Backup VIP)
 
-## Architecture
+---
 
-### Serveur de Base de Données (SRV-MOBAPPBD)
-- **IP**: 10.101.1.57
-- **Services**: PostgreSQL, Redis, RabbitMQ, MinIO
-- **Stockage**: 500 Go (partition données)
+## Étape 0 : Préparation des Utilisateurs (Best Practice)
 
-### Serveurs d'Application
-- **SRV-MOBAPP1** (10.101.1.210): API + Celery Worker + Flower + Nginx LB
-- **SRV-MOBAPP2** (10.101.1.211): API + Celery Worker
-- **Stockage**: 300 Go chacun (partition données)
+Pour éviter d'utiliser votre compte personnel (`admin.pcyn`), nous allons créer un utilisateur de service `samaconso` et un groupe pour les ingénieurs.
 
-## Démarrage Rapide
+**Sur les 3 serveurs :**
 
-### 1. Préparation
+1.  Créez l'utilisateur de service et le groupe :
+    ```bash
+    # Créer l'utilisateur système (sans login)
+    sudo useradd -r -s /bin/false samaconso
+    
+    # Créer le groupe d'administration (si pas créé automatiquement)
+    sudo groupadd samaconso-admins
+    
+    # Ajouter l'utilisateur de service au groupe docker (pour lancer les conteneurs)
+    sudo usermod -aG docker samaconso
+    ```
 
-Sur chaque serveur, rendre les scripts exécutables:
-```bash
-chmod +x deployment/scripts/*.sh
-```
+2.  Ajoutez-vous (et vos collègues) au groupe `samaconso-admins` et `docker` :
+    ```bash
+    # Remplacez admin.pcyn par votre user
+    sudo usermod -aG samaconso-admins,docker admin.pcyn
+    
+    # Pour vos collègues :
+    # sudo usermod -aG samaconso-admins,docker autre.ingenieur
+    ```
+    *Déconnectez-vous et reconnectez-vous pour que les groupes soient pris en compte.*
 
-### 2. Installation des Serveurs
+---
 
-```bash
-# Sur SRV-MOBAPPBD
-sudo bash deployment/scripts/setup-db-server.sh
+## Étape 1 : MinIO Distribué (Sur les 3 serveurs)
 
-# Sur SRV-MOBAPP1
-sudo bash deployment/scripts/setup-app-server.sh SRV-MOBAPP1 10.101.1.210 10.101.1.57
+MinIO doit être installé nativement sur les 3 machines pour créer un cluster de stockage résilient.
 
-# Sur SRV-MOBAPP2
-sudo bash deployment/scripts/setup-app-server.sh SRV-MOBAPP2 10.101.1.211 10.101.1.57
-```
+**IMPORTANT:** Le script installe MinIO en mode standalone sur chaque serveur. Pour créer un cluster distribué:
 
-### 3. Déploiement
+1.  Copiez le script `install_minio_distributed.sh` sur les 3 serveurs.
+2.  Exécutez-le sur chaque serveur (dans l'ordre: BD, SRV1, SRV2) :
+    ```bash
+    sudo bash install_minio_distributed.sh
+    ```
+3.  **Après le premier démarrage sur tous les serveurs**, modifiez `/etc/default/minio` sur chaque serveur pour activer le mode distribué:
+    ```bash
+    MINIO_VOLUMES="http://10.101.1.212:9000/data/minio http://10.101.1.210:9000/data/minio http://10.101.1.211:9000/data/minio"
+    ```
+4.  Redémarrez MinIO sur tous les serveurs:
+    ```bash
+    sudo systemctl restart minio
+    ```
 
-```bash
-# Sur SRV-MOBAPPBD
-sudo bash deployment/scripts/deploy-db.sh
+---
 
-# Sur SRV-MOBAPP1
-sudo bash deployment/scripts/deploy-app.sh SRV-MOBAPP1 10.101.1.210 10.101.1.57
-sudo bash deployment/scripts/setup-nginx-lb.sh
+## Étape 2 : Base de Données (SRV-MOBAPPBD)
 
-# Sur SRV-MOBAPP2
-sudo bash deployment/scripts/deploy-app.sh SRV-MOBAPP2 10.101.1.211 10.101.1.57
-```
+1.  Utilisez le dossier `database_server`.
+2.  Installez Postgres :
+    ```bash
+    cd database_server
+    sudo bash install_postgres.sh
+    ```
+    *(Note : Le fichier docker-compose.services.yml n'est plus nécessaire ici car Redis/RabbitMQ sont déplacés)*
 
-### 4. Vérification
+---
 
-```bash
-# Vérifier la santé de tous les services
-bash deployment/scripts/health-check.sh
-```
+## Étape 3 : Serveurs Applicatifs
 
-## Documentation Complète
+### Sur SRV-MOBAPP1 (10.101.1.210)
+1.  Utilisez le fichier `app_servers/docker-compose.srv1.yml` (renommez-le en `docker-compose.yml`).
+2.  **Permissions :** Assurez-vous que les dossiers de logs appartiennent au groupe :
+    ```bash
+    mkdir -p logs uploaded_files
+    sudo chown -R samaconso:samaconso-admins logs uploaded_files
+    sudo chmod -R 775 logs uploaded_files
+    ```
+3.  Lancez : `docker-compose up -d`
+3.  Installez Nginx et Keepalived (voir dossier `app_servers`).
 
-Consulter [GUIDE_DEPLOIEMENT.md](GUIDE_DEPLOIEMENT.md) pour:
-- Instructions détaillées étape par étape
-- Configuration de la scalabilité
-- Procédures de maintenance
-- Dépannage
-- Recommandations de sécurité
+### Sur SRV-MOBAPP2 (10.101.1.211)
+1.  Utilisez le fichier `app_servers/docker-compose.srv2.yml` (renommez-le en `docker-compose.yml`).
+2.  **Permissions :**
+    ```bash
+    mkdir -p logs uploaded_files
+    sudo chown -R samaconso:samaconso-admins logs uploaded_files
+    sudo chmod -R 775 logs uploaded_files
+    ```
+3.  Lancez : `docker-compose up -d`
+3.  **Cluster RabbitMQ :** Une fois lancé, rejoignez le cluster :
+    ```bash
+    docker exec -it samaconso_rabbitmq rabbitmqctl stop_app
+    docker exec -it samaconso_rabbitmq rabbitmqctl join_cluster rabbit@rabbitmq1
+    docker exec -it samaconso_rabbitmq rabbitmqctl start_app
+    ```
+4.  Installez Nginx et Keepalived.
+
+---
+
+## Étape 4 : Vérification
+
+1.  **API :** `http://10.101.1.250/health` (VIP Keepalived)
+2.  **MinIO :** `http://10.101.1.212:9001` (Console) - Vous devriez voir 3 drives en ligne après configuration du cluster.
+3.  **Redis :** Connectez-vous au Redis Master sur 10.101.1.210.
+4.  **RabbitMQ :** Vérifiez le cluster via `http://10.101.1.210:15672` (admin/Senelec2024!)
 
 ## Notes Importantes
 
-1. **Mots de passe**: Modifier tous les mots de passe par défaut dans les fichiers `.env`
-2. **Firebase**: S'assurer que le fichier `samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json` est présent
-3. **Réseau**: Vérifier que tous les ports nécessaires sont ouverts entre les serveurs
-4. **Partitions**: Configurer les partitions de données avant le déploiement
-
-## Support
-
-Pour toute question, consulter le guide de déploiement ou les logs Docker:
-```bash
-docker-compose logs -f
-```
-
+- **Keepalived:** Assure le failover automatique. Seul le serveur MASTER répond sur la VIP (10.101.1.250).
+- **Nginx:** Configure pour pointer vers localhost:8000 sur chaque serveur. Pour un vrai load balancing distribué, voir `ANALYSE_ET_CORRECTIONS.md`.
+- **Mots de passe:** Tous les mots de passe par défaut sont `Senelec2024!`. Changez-les en production!
+- **IP Base de données:** Vérifiez que l'IP 10.101.1.212 est correcte (peut être 10.101.1.57 selon votre infrastructure).

@@ -7,6 +7,7 @@ from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, CACHE_KEYS
 from app.database import get_db_samaconso
 from app.models.models import User, UserSession
 from app.schemas.user_schemas import (
+    UserCreateSchema,
     UserUpdateSchema, 
     UserUpdateCodePinSchema, 
     UserResponseSchema
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 user_router = APIRouter(prefix="/user", tags=["User"])
 
 @user_router.post("/")
-async def create_user(user, db: Session = Depends(get_db_samaconso)):
+async def create_user(user:UserCreateSchema, db: Session = Depends(get_db_samaconso)):
     """Créer un utilisateur - Version simplifiée sans logs verbeux"""
     try:
         # Vérification utilisateur existant
@@ -36,7 +37,8 @@ async def create_user(user, db: Session = Depends(get_db_samaconso)):
             user.codePin = get_password_hash(user.codePin)
 
         # Création utilisateur
-        created_user = User(**user.model_dump())
+        user_data = user.model_dump(exclude={'created_at', 'updated_at'}, exclude_none=True)
+        created_user = User(**user_data)
         db.add(created_user)
         db.commit()
         db.refresh(created_user)

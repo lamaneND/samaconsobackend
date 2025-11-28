@@ -68,3 +68,5 @@ docker-compose*.yml
 # Fichiers de backup
 *.bak
 *.backup
+
+.erlang.cookie
