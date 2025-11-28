@@ -83,14 +83,17 @@ app = FastAPI(title="SamaConso API", version="2.0.0")
 
 origins = [
     "*",
+    # Ajoutez d'autres origines de production si nécessaire
+    # "https://votre-domaine-production.com",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Ajouter les middlewares de logging
@@ -145,18 +148,33 @@ async def on_startup() -> None:
     except Exception as e:
         main_logger.warning(f"⚠️ RabbitMQ non disponible, continuons sans: {e}")
 
-    # Initialisation MinIO
+    # Initialisation MinIO (avec timeout pour éviter de bloquer le démarrage)
     try:
-        init_minio_service(
-            endpoint=config.MINIO_ENDPOINT,
-            access_key=config.MINIO_ACCESS_KEY,
-            secret_key=config.MINIO_SECRET_KEY,
-            secure=config.MINIO_SECURE,
-            bucket_name=config.MINIO_BUCKET_NAME
-        )
-        main_logger.info("✅ MinIO service initialized successfully")
+        main_logger.info(f"🔧 Tentative d'initialisation MinIO avec endpoint: '{config.MINIO_ENDPOINT}'")
+        import asyncio
+        try:
+            # Exécuter l'initialisation MinIO avec un timeout de 10 secondes
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    init_minio_service,
+                    endpoint=config.MINIO_ENDPOINT,
+                    access_key=config.MINIO_ACCESS_KEY,
+                    secret_key=config.MINIO_SECRET_KEY,
+                    secure=config.MINIO_SECURE,
+                    bucket_name=config.MINIO_BUCKET_NAME
+                ),
+                timeout=10.0  # Timeout de 10 secondes
+            )
+            main_logger.info("✅ MinIO service initialized successfully")
+        except asyncio.TimeoutError:
+            main_logger.warning("⚠️ MinIO initialization timed out after 10s, continuing without MinIO")
+            main_logger.warning("⚠️ MinIO operations will not be available until service is restarted")
+        except Exception as e:
+            raise
     except Exception as e:
         main_logger.error(f"❌ MinIO initialization failed: {e}")
+        main_logger.error(f"   Endpoint configuré: '{config.MINIO_ENDPOINT}'")
+        main_logger.error(f"   Secure mode: {config.MINIO_SECURE}")
         # Ne pas bloquer le démarrage si MinIO n'est pas disponible
         main_logger.warning("⚠️ Application continuera sans MinIO")
 

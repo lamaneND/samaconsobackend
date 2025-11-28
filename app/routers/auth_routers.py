@@ -75,27 +75,27 @@ def login_with_oauth2(
             log_security("Unexpected login condition", user.id, client_ip, f"Username: {username}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid login method")
 
+            # Générer la paire access + refresh token
+        access_token, refresh_token = create_token_pair(user.id)
+        
+        # Sauvegarder le refresh token en base (hashé)
+        save_refresh_token(db, user.id, refresh_token, device_model=None, fcm_token=None)
+        
+        # Log de succès
+        logger.info(f"✅ Login successful | User ID: {user.id} | Username: {username} | IP: {client_ip}")
+        log_security("Successful login", user.id, client_ip, f"Method: OAuth2, Username: {username}")
 
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
     else:
         logger.error(f"❌ Login failed - Invalid method | Username: {username} | IP: {client_ip}")
         log_security("Invalid login method", None, client_ip, f"Username: {username}")
         raise HTTPException(status_code=400, detail="Invalid login method")
 
-    # Générer la paire access + refresh token
-    access_token, refresh_token = create_token_pair(user.id)
-    
-    # Sauvegarder le refresh token en base (hashé)
-    save_refresh_token(db, user.id, refresh_token, device_model=None, fcm_token=None)
-    
-    # Log de succès
-    logger.info(f"✅ Login successful | User ID: {user.id} | Username: {username} | IP: {client_ip}")
-    log_security("Successful login", user.id, client_ip, f"Method: OAuth2, Username: {username}")
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+   
 
 
 @auth_router.post("/token-json", summary="Login with json")
@@ -124,32 +124,33 @@ def login_with_json(
             if not verify_password(password, user.codePin):
               #  logger.debug("Code verification failed")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            user.codePin = None  # Clear OTP after successful login
+            
         else:
            # logger.debug("Unexpected login condition")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid login method")
-
+    
+    # Générer la paire access + refresh token
+        access_token, refresh_token = create_token_pair(user.id)
+        
+        # Récupérer device_model et fcm_token si fournis
+        device_model = getattr(json_data, 'device_model', None)
+        fcm_token = getattr(json_data, 'fcm_token', None)
+        
+        
+        # Sauvegarder le refresh token en base (hashé)
+        save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
+        user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
+        return {
+            "status_code": status.HTTP_200_OK,
+            "user": user,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
 
     else:
         raise HTTPException(status_code=400, detail="Invalid login method")
 
-    # Générer la paire access + refresh token
-    access_token, refresh_token = create_token_pair(user.id)
-    
-    # Récupérer device_model et fcm_token si fournis
-    device_model = getattr(json_data, 'device_model', None)
-    fcm_token = getattr(json_data, 'fcm_token', None)
-    
-    # Sauvegarder le refresh token en base (hashé)
-    save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
-
-    return {
-        "status_code": status.HTTP_200_OK,
-        "user": user,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
 
 
 @auth_router.post("/token-json-v2", summary="Login with json v2")
@@ -189,32 +190,33 @@ def login_with_json_v2(
             if not verify_password(password, user.codePin):
               #  logger.debug("Code verification failed")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            user.codePin = None  # Clear OTP after successful login
+            # Clear OTP after successful login
         else:
            # logger.debug("Unexpected login condition")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid login method")
 
-
+        # Générer la paire access + refresh token
+        access_token, refresh_token = create_token_pair(user.id)
+        
+        # Récupérer device_model et fcm_token si fournis
+        device_model = getattr(json_data, 'device_model', None)
+        fcm_token = getattr(json_data, 'fcm_token', None)
+        
+        
+        # Sauvegarder le refresh token en base (hashé)
+        save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
+        user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
+        return {
+            "status_code": status.HTTP_200_OK,
+            "user": user,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
     else:
         raise HTTPException(status_code=400, detail="Invalid login method")
 
-    # Générer la paire access + refresh token
-    access_token, refresh_token = create_token_pair(user.id)
-    
-    # Récupérer device_model et fcm_token si fournis
-    device_model = getattr(json_data, 'device_model', None)
-    fcm_token = getattr(json_data, 'fcm_token', None)
-    
-    # Sauvegarder le refresh token en base (hashé)
-    save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
-
-    return {
-        "status_code": status.HTTP_200_OK,
-        "user": user,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+  
 
 
 
@@ -247,28 +249,28 @@ def login_with_ldap(
            # logger.debug("Unexpected login condition")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid login method")
 
+         # Générer la paire access + refresh token
+        access_token, refresh_token = create_token_pair(user.id)
+        
+        # Récupérer device_model et fcm_token si fournis
+        device_model = getattr(json_data, 'device_model', None)
+        fcm_token = getattr(json_data, 'fcm_token', None)
+        
+        # Sauvegarder le refresh token en base (hashé)
+        save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
+        user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
+        return {
+            "status_code": status.HTTP_200_OK,
+            "user": user,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
 
     else:
         raise HTTPException(status_code=400, detail="Invalid login method")
 
-    # Générer la paire access + refresh token
-    access_token, refresh_token = create_token_pair(user.id)
-    
-    # Récupérer device_model et fcm_token si fournis
-    device_model = getattr(json_data, 'device_model', None)
-    fcm_token = getattr(json_data, 'fcm_token', None)
-    
-    # Sauvegarder le refresh token en base (hashé)
-    save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
-
-    return {
-        "status_code": status.HTTP_200_OK,
-        "user": user,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
-
+   
 
 @auth_router.post("/refresh", summary="Refresh access token")
 def refresh_access_token(

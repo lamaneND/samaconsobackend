@@ -184,7 +184,7 @@ async def createv2(data: UserCompteurCreateSchemaV2, db: Session = Depends(get_d
 
                     title:str = f"{user.firstName} {user.lastName}"
                     body :str = f"souhaite accéder au compteur n° {data.numero_compteur} situé à adresse : {compteurTrouve.adresse}"
-                    type_notification_id:int = 10
+                    type_notification_id:int = 1
                     # Send notification via Celery (async)
                     for_user_notif(type_notification_id=type_notification_id,title=title,body=body,for_user_id=user_compteur_owner.user_id,event_id=userCompteurDbObj.id,db=db)
 
@@ -291,7 +291,7 @@ async def createv2(data: UserCompteurCreateSchemaV2, db: Session = Depends(get_d
 
                 title:str = f"{user.firstName} {user.lastName}"
                 body :str = f"souhaite accéder au compteur n° {data.numero_compteur} situé à adresse : {compteurTrouve.adresse}"
-                type_notification_id:int = 10
+                type_notification_id:int = 1
                 # Send notification via Celery (async)
                 for_user_notif(type_notification_id=type_notification_id,title=title,body=body,for_user_id=user_compteur_owner.user_id,event_id=userCompteurDbObj.id,db=db)
 
@@ -495,10 +495,10 @@ async def recup_compteur_cons_trans(user_compteur_id:int,db:Session=Depends(get_
 async def list_all_for_user(user_id:int,db: Session = Depends(get_db_samaconso)):
     user = db.query(User).filter(User.id==user_id).first()
     if(user):
-        if user.role==7:
+        if user.role==2:
              return db.query(UserCompteur).all()
         
-        if user.role==2:
+        if user.role==3:
             return db.query(UserCompteur).filter(UserCompteur.id_agence==user.id_agence).all()
     
     return 
@@ -519,10 +519,10 @@ async def validerCompteur(user_compteur_id:int,data:ActivateUserCompteur,db:Sess
 
     from_user = db.query(User).filter(User.id==user_compteur_db.user_id).first()
 
-    notifications = db.query(Notification).filter(and_(Notification.event_id==user_compteur_db.id,Notification.type_notification_id==10)).all()
+    notifications = db.query(Notification).filter(and_(Notification.event_id==user_compteur_db.id,Notification.type_notification_id==1)).all()
     
     for notification in notifications:
-        notification.type_notification_id=13
+        notification.type_notification_id=3
         db.commit()
         db.refresh(notification)
 
@@ -530,7 +530,7 @@ async def validerCompteur(user_compteur_id:int,data:ActivateUserCompteur,db:Sess
 
                 title:str = f"Compteur validé"
                 body :str = f"compteur n° {user_compteur_db.numero_compteur} situé à adresse : {user_compteur_db.adresse}"
-                type_notification_id:int = 13
+                type_notification_id:int = 3
                 # Send notification via Celery (async)
                 for_user_notif(type_notification_id=type_notification_id,title=title,body=body,for_user_id=from_user.id,event_id=user_compteur_db.id,db=db)
 

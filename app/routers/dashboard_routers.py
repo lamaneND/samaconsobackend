@@ -42,10 +42,10 @@ def dashboard(user_id:int,db:Session=Depends(get_db_samaconso)):
    if user:
        role = user.role
        #Admin
-       if(role==7):
+       if(role==2):
            compteurs = db.query(UserCompteur).all()
         
-       elif(role==2):
+       elif(role==3):
            agence = db.query(Agence).filter(Agence.id==user.id_agence).first()
            compteurs = db.query(UserCompteur).filter(UserCompteur.nom_agence==agence.nom_corrige).all()
        total_compteurs = len(compteurs)

@@ -10,7 +10,7 @@ from app.config import CACHE_KEYS
 type_router = APIRouter(prefix="/type_compteur", tags=["TypeCompteur"])
 
 @type_router.post("/")
-async def create(data, db: Session = Depends(get_db_samaconso)):
+async def create(data:TypeCompteurCreateSchema, db: Session = Depends(get_db_samaconso)):
     """Créer un type de compteur avec cache longue durée (données de référence)"""
     # Éviter les doublons rapidement via cache
     cache_key_by_label = CACHE_KEYS["TYPE_COMPTEUR_BY_LABEL"].format(label=data.label)

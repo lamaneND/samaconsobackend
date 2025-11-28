@@ -32,17 +32,21 @@ class MinioService:
             secure: Utiliser HTTPS (True) ou HTTP (False)
             bucket_name: Nom du bucket par défaut
         """
-        self.client = Minio(
-            endpoint=endpoint,
-            access_key=access_key,
-            secret_key=secret_key,
-            secure=secure
-        )
-        self.bucket_name = bucket_name
-        self._ensure_bucket_exists()
+        try:
+            self.client = Minio(
+                endpoint=endpoint,
+                access_key=access_key,
+                secret_key=secret_key,
+                secure=secure
+            )
+            self.bucket_name = bucket_name
+            self._ensure_bucket_exists()
+        except Exception as e:
+            logger.error(f"Failed to initialize MinIO client with endpoint '{endpoint}': {e}")
+            raise ValueError(f"MinIO initialization failed: {str(e)}") from e
 
     def _ensure_bucket_exists(self):
-        """Crée le bucket s'il n'existe pas"""
+        """Crée le bucket s'il n'existe pas (avec gestion d'erreur non-bloquante)"""
         try:
             if not self.client.bucket_exists(self.bucket_name):
                 self.client.make_bucket(self.bucket_name)
@@ -50,8 +54,23 @@ class MinioService:
             else:
                 logger.info(f"Bucket '{self.bucket_name}' existe déjà")
         except S3Error as e:
-            logger.error(f"Erreur lors de la création du bucket: {e}")
-            raise
+            error_str = str(e)
+            # Ne pas bloquer pour les erreurs de service indisponible
+            if "503" in error_str or "Service Unavailable" in error_str:
+                logger.warning(f"⚠️ MinIO service unavailable (503), continuing without bucket verification: {e}")
+                logger.warning("⚠️ Application will continue without MinIO bucket verification")
+            else:
+                logger.error(f"Erreur S3 lors de la création du bucket: {e}")
+                raise
+        except Exception as e:
+            # Pour les erreurs de connexion/timeout, ne pas bloquer le démarrage
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ["503", "timeout", "connection", "unavailable", "refused"]):
+                logger.warning(f"⚠️ MinIO connection issue (non-blocking): {e}")
+                logger.warning("⚠️ Application will continue without MinIO bucket verification")
+            else:
+                logger.error(f"Erreur inattendue lors de la vérification du bucket: {e}")
+                raise
 
     def upload_file(
         self,
@@ -265,6 +284,93 @@ def get_minio_service() -> MinioService:
     return minio_service
 
 
+def _clean_and_validate_endpoint(endpoint: str) -> str:
+    """
+    Nettoie et valide le format de l'endpoint MinIO
+    
+    Le client MinIO attend un format strict: "host:port" sans protocole.
+    Pour les clusters distribués (endpoints séparés par des virgules),
+    seul le premier endpoint sera utilisé car le client MinIO Python
+    ne supporte qu'un seul endpoint à la fois.
+    
+    Args:
+        endpoint: Endpoint brut (peut contenir http://, https://, ou plusieurs endpoints séparés par des virgules)
+        
+    Returns:
+        str: Endpoint nettoyé au format host:port
+        
+    Raises:
+        ValueError: Si l'endpoint n'est pas valide
+    """
+    if not endpoint or not isinstance(endpoint, str):
+        raise ValueError("Endpoint MinIO ne peut pas être vide")
+    
+    # Nettoyer l'endpoint
+    cleaned = endpoint.strip()
+    
+    # Retirer le protocole si présent
+    if cleaned.startswith("http://"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("https://"):
+        cleaned = cleaned[8:]
+    
+    # Retirer le slash final s'il existe
+    cleaned = cleaned.rstrip("/")
+    
+    # Gérer les endpoints multiples (cluster distribué MinIO)
+    # Le client MinIO Python ne supporte qu'un seul endpoint à la fois
+    # Pour un cluster distribué, on utilise le premier endpoint
+    # Le nœud MinIO gérera la communication avec le reste du cluster
+    if "," in cleaned:
+        endpoints_list = [e.strip() for e in cleaned.split(",") if e.strip()]
+        if not endpoints_list:
+            raise ValueError(f"Aucun endpoint valide trouvé dans: '{endpoint}'")
+        
+        if len(endpoints_list) > 1:
+            logger.warning(
+                f"Endpoint MinIO contient plusieurs adresses (cluster distribué): {endpoints_list}. "
+                f"Le client MinIO Python ne supporte qu'un seul endpoint. "
+                f"Utilisation du premier endpoint: '{endpoints_list[0]}'. "
+                f"Le nœud MinIO gérera la communication avec le reste du cluster."
+            )
+        cleaned = endpoints_list[0]
+    
+    # Valider le format host:port
+    if ":" not in cleaned:
+        raise ValueError(
+            f"Format d'endpoint MinIO invalide: '{endpoint}'. "
+            f"Format attendu: 'host:port' (ex: 'localhost:9000' ou '10.101.1.212:9000')"
+        )
+    
+    # Extraire host et port
+    parts = cleaned.split(":", 1)
+    host = parts[0].strip()
+    port_str = parts[1].strip() if len(parts) > 1 else ""
+    
+    # Valider que le host n'est pas vide
+    if not host:
+        raise ValueError(f"Host MinIO ne peut pas être vide dans l'endpoint: '{endpoint}'")
+    
+    # Valider que le port n'est pas vide
+    if not port_str:
+        raise ValueError(f"Port MinIO ne peut pas être vide dans l'endpoint: '{endpoint}'")
+    
+    # Valider le port est un nombre valide
+    try:
+        port = int(port_str)
+        if port < 1 or port > 65535:
+            raise ValueError(f"Port invalide: {port}. Le port doit être entre 1 et 65535")
+    except ValueError as e:
+        if "invalid literal" in str(e).lower():
+            raise ValueError(
+                f"Port invalide dans l'endpoint MinIO '{endpoint}': '{port_str}' n'est pas un nombre valide"
+            ) from e
+        raise
+    
+    logger.debug(f"Endpoint MinIO nettoyé: '{endpoint}' -> '{cleaned}'")
+    return cleaned
+
+
 def init_minio_service(
     endpoint: str,
     access_key: str,
@@ -276,7 +382,7 @@ def init_minio_service(
     Initialise le service MinIO
 
     Args:
-        endpoint: URL du serveur MinIO
+        endpoint: URL du serveur MinIO (peut être au format host:port, http://host:port, etc.)
         access_key: Clé d'accès MinIO
         secret_key: Clé secrète MinIO
         secure: Utiliser HTTPS
@@ -284,14 +390,41 @@ def init_minio_service(
 
     Returns:
         MinioService: Instance du service MinIO
+        
+    Raises:
+        ValueError: Si l'endpoint est invalide ou si l'initialisation échoue
     """
     global minio_service
-    minio_service = MinioService(
-        endpoint=endpoint,
-        access_key=access_key,
-        secret_key=secret_key,
-        secure=secure,
-        bucket_name=bucket_name
-    )
-    logger.info("Service MinIO initialisé avec succès")
-    return minio_service
+    
+    # Log l'endpoint original pour debug
+    logger.info(f"Initialisation MinIO avec endpoint original: '{endpoint}'")
+    
+    # Nettoyer et valider l'endpoint
+    try:
+        cleaned_endpoint = _clean_and_validate_endpoint(endpoint)
+        logger.info(f"Endpoint MinIO nettoyé et validé: '{cleaned_endpoint}'")
+    except ValueError as e:
+        logger.error(f"Validation de l'endpoint MinIO échouée: {e}")
+        raise
+    
+    # Valider les credentials
+    if not access_key:
+        raise ValueError("MinIO access_key est requis")
+    if not secret_key:
+        raise ValueError("MinIO secret_key est requis")
+    
+    try:
+        minio_service = MinioService(
+            endpoint=cleaned_endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
+            bucket_name=bucket_name
+        )
+        logger.info("Service MinIO initialisé avec succès")
+        return minio_service
+    except Exception as e:
+        logger.error(f"Échec de l'initialisation du service MinIO: {e}")
+        logger.error(f"Endpoint utilisé: '{cleaned_endpoint}', Secure: {secure}")
+        minio_service = None  # S'assurer que le service global est None en cas d'échec
+        raise
