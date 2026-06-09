@@ -178,4 +178,5 @@ class SeuilTarif(Base):
     created_at  = Column(DateTime(timezone=True), nullable=False, default=datetime.now())
 
 
-Base.metadata.create_all(engine)
+# Les tables sont gérées par Alembic (alembic upgrade head)
+# Ne jamais appeler create_all ici — voir BUG-002 dans docs/ERREURS.md

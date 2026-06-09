@@ -27,7 +27,6 @@ from app.routers.simulateur_routers import simulateur_router
 from app.routers.logs_routers import logs_router
 from app.firebase import *
 from app.cache import init_redis, close_redis, get_redis
-from app.rabbitmq import init_rabbitmq, close_rabbitmq
 from app.routers.utils_routers import utils_router
 from app.logging_config import init_logging, get_logger
 from app.middleware.logging_middleware import RequestLoggingMiddleware, SecurityLoggingMiddleware
@@ -141,12 +140,6 @@ async def on_startup() -> None:
         main_logger.error(f"❌ Redis initialization failed: {e}")
         raise
 
-    # RabbitMQ (Réactivé pour la production)
-    try:
-        await init_rabbitmq()
-        main_logger.info("✅ RabbitMQ connection initialized successfully")
-    except Exception as e:
-        main_logger.warning(f"⚠️ RabbitMQ non disponible, continuons sans: {e}")
 
     # Initialisation MinIO (avec timeout pour éviter de bloquer le démarrage)
     try:
@@ -191,12 +184,6 @@ async def on_shutdown() -> None:
     except Exception as e:
         main_logger.error(f"❌ Error closing Redis connection: {e}")
     
-    # RabbitMQ temporairement désactivé
-    # try:
-    #     await close_rabbitmq()
-    #     main_logger.info("✅ RabbitMQ connection closed successfully")
-    # except Exception as e:
-    #     main_logger.warning(f"⚠️ Erreur lors de la fermeture RabbitMQ: {e}")
     
     main_logger.info("🏁 Application shutdown completed")
 
@@ -225,14 +212,16 @@ async def health_redis():
         return {"status": "error", "detail": str(e)}
 
 
-@app.get("/health/rabbitmq")
-async def health_rabbitmq():
+@app.get("/health/broker")
+async def health_broker():
+    """Vérifie que le broker Celery (Redis) est accessible"""
     try:
-        # If startup initialized connection successfully, this will be fine
-        main_logger.info("✅ RabbitMQ health check successful")
-        return {"status": "ok"}
+        client = get_redis()
+        await client.ping()
+        main_logger.info("✅ Celery broker (Redis) health check successful")
+        return {"status": "ok", "broker": "redis"}
     except Exception as e:
-        main_logger.error(f"❌ RabbitMQ health check failed: {e}")
+        main_logger.error(f"❌ Celery broker health check failed: {e}")
         return {"status": "error", "detail": str(e)}
 
 

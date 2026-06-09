@@ -131,3 +131,7 @@ MinIO doit être installé nativement sur les 3 machines pour créer un cluster 
 - **Nginx:** Configure pour pointer vers localhost:8000 sur chaque serveur. Pour un vrai load balancing distribué, voir `ANALYSE_ET_CORRECTIONS.md`.
 - **Mots de passe:** Tous les mots de passe par défaut sont `Senelec2024!`. Changez-les en production!
 - **IP Base de données:** Vérifiez que l'IP 10.101.1.212 est correcte (peut être 10.101.1.57 selon votre infrastructure).
+
+
+
+

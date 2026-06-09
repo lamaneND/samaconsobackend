@@ -415,6 +415,62 @@ async def list_all_user_compteur_inactive(id:int,db: Session = Depends(get_db_sa
     compteurs =  db.query(UserCompteur).filter(and_(UserCompteur.user_id==id,UserCompteur.est_active==False)).order_by(UserCompteur.created_at.desc()).all()
     return {"compteurs":compteurs}
 
+@user_compteur_router.get("/proprietaireactive/{user_id}")
+async def list_all_usercompteur_a_activer(user_id:int,db: Session = Depends(get_db_samaconso)):
+    compteurs = db.query(UserCompteur).filter(and_(UserCompteur.user_id==user_id,UserCompteur.est_proprietaire==True)).order_by(UserCompteur.created_at.desc()).all()
+    if not compteurs:
+        return {"status":404,"detail":"Pas de user compteur"}
+    compteursAactiver = []
+    for c in compteurs:
+        autres_compteurs = []
+        if c.type_compteur==1:
+            autres_compteurs = db.query(UserCompteur).filter(
+                and_(
+                    UserCompteur.numero_compteur == c.numero_compteur,
+                    UserCompteur.poc == c.poc,
+                    UserCompteur.user_id!= user_id,
+                    UserCompteur.est_proprietaire == False
+                )
+            ).options(
+                joinedload(UserCompteur.user)
+            ).order_by(UserCompteur.created_at.desc()).all()
+        else:
+            autres_compteurs = db.query(UserCompteur).filter(
+                and_(UserCompteur.numero_compteur==c.numero_compteur,
+                UserCompteur.user_id!=user_id,
+                UserCompteur.est_proprietaire==False)
+            ).options(
+                joinedload(UserCompteur.user)
+            ).order_by(UserCompteur.created_at.desc()).all()
+
+        for autre_c in autres_compteurs:
+            compteur_data = {
+                "id": autre_c.id,
+                "compteur_id": autre_c.compteur_id,
+                "user_id": autre_c.user_id,
+                "est_proprietaire": autre_c.est_proprietaire,
+                "est_active": autre_c.est_active,
+                "numero_compteur": autre_c.numero_compteur,
+                "type_compteur": autre_c.type_compteur,
+                "nom_client": autre_c.nom_client,
+                "adresse": autre_c.adresse,
+                "poc": autre_c.poc,
+                "created_at": autre_c.created_at.strftime("%d/%m/%Y %H:%M:%S") if autre_c.created_at else None,
+                "updated_at": autre_c.updated_at.strftime("%d/%m/%Y %H:%M:%S") if autre_c.updated_at else None,
+            }
+            
+            # Ajouter les informations de l'utilisateur qui a ajouté le compteur
+            if autre_c.user:
+                    compteur_data["user"] = {
+                        "id": autre_c.user.id,
+                        "firstName": autre_c.user.firstName,
+                        "lastName": autre_c.user.lastName,
+                        "phoneNumber": autre_c.user.phoneNumber
+                    }
+            
+            compteursAactiver.append(compteur_data)
+
+    return {"status":200,"compteurs": compteursAactiver}
 
 @user_compteur_router.put("/{user_compteur_id}")
 async def update_etat(user_compteur_id:int,compteur_update : UserCompteurUpdate,db: Session = Depends(get_db_samaconso)):

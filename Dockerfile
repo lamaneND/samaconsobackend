@@ -20,8 +20,12 @@ WORKDIR /app
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --user \
+      --trusted-host pypi.org \
+      --trusted-host pypi.python.org \
+      --trusted-host files.pythonhosted.org \
+      --timeout=120 \
+      -r requirements.txt
 
 # Production stage
 FROM python:3.10-slim-bookworm
@@ -42,14 +46,13 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     unixodbc \
     unixodbc-dev \
-    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -fsSL --insecure https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
+    && echo 'Acquire::https::packages.microsoft.com { Verify-Peer "false"; Verify-Host "false"; };' > /etc/apt/apt.conf.d/99microsoft-noverify \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
-    && apt-get install -y mssql-tools18 \
-    && echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> /etc/bash.bashrc \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99microsoft-noverify
 
 # Créer le répertoire pour les certificats SSL
 RUN mkdir -p /etc/ssl/certs
@@ -64,7 +67,7 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Set PATH to use appuser's local bin
-ENV PATH=/home/appuser/.local/bin:/opt/mssql-tools18/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Copy application code
 COPY --chown=appuser:appuser . .

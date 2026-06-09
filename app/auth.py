@@ -7,7 +7,6 @@ from typing import Optional, Tuple
 import jwt
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from passlib.context import CryptContext
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from app.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
@@ -19,40 +18,16 @@ from app.config import LDAP_SEARCH_PASSWORD, LDAP_SEARCH_USER, LDAP_SERVER,LDAP_
 import bcrypt
 
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-#Vérifier mot de passe
+#Vérifier mot de passe — utilise bcrypt directement (passlib 1.7.4 incompatible avec bcrypt 4+)
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # Try direct verification first (for backward compatibility with existing passwords)
-    # if pwd_context.verify(plain_password, hashed_password):
-    #     return True
-    
-    # # If direct verification fails, try with SHA-256 pre-hash (for passwords > 72 bytes)
-    # password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
-    # return pwd_context.verify(password_hash, hashed_password)
-    #return pwd_context.verify(plain_password, hashed_password)
-    #plain_password_bytes = plain_password.encode('utf-8')
-    return pwd_context.verify(plain_password, hashed_password)
-   
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
 #Crypter mot de passe
 def get_password_hash(password: str) -> str:
-    # Pre-hash with SHA-256 to support passwords longer than 72 bytes (bcrypt limitation)
-    # This ensures all new passwords work regardless of length
-    # password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-    # return pwd_context.hash(password_hash)
-    #return pwd_context.hash(password)
-    #password_bytes = password.encode('utf-8') 
-    return pwd_context.hash(password)
-    # pwd_bytes = password.encode('utf-8')
-    # salt = bcrypt.gensalt()
-    # hashed = bcrypt.hashpw(pwd_bytes, salt)
-    
-    # # On retourne une string pour le stockage en base de données
-    # return hashed.decode('utf-8')
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
  
 
 
@@ -77,19 +52,20 @@ def create_refresh_token() -> str:
     """
     return secrets.token_urlsafe(32)  # 32 bytes = 43 caractères URL-safe
 
-#Hasher refresh token pour stockage
+#Hasher refresh token pour stockage — SHA-256 suffit (le token est déjà aléatoire)
 def hash_refresh_token(token: str) -> str:
     """
-    Hash le refresh token pour stockage sécurisé en base de données
+    Hash le refresh token pour stockage sécurisé en base de données.
+    SHA-256 suffit car le token est généré par secrets.token_urlsafe (déjà aléatoire).
     """
-    return pwd_context.hash(token)
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
 #Vérifier refresh token
 def verify_refresh_token(plain_token: str, hashed_token: str) -> bool:
     """
     Vérifie si un refresh token en clair correspond au hash stocké
     """
-    return pwd_context.verify(plain_token, hashed_token)
+    return hashlib.sha256(plain_token.encode('utf-8')).hexdigest() == hashed_token
 
 #Créer une paire access + refresh token
 def create_token_pair(user_id: int) -> Tuple[str, str]:

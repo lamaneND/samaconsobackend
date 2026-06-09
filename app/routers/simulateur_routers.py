@@ -87,14 +87,23 @@ class Pkcs12TLS12LegacyAdapter(HTTPAdapter):
     @staticmethod
     def _build_ssl_context(certfile: str, keyfile: str) -> ssl.SSLContext:
         ctx = create_urllib3_context()
+        # Permettre TLS 1.0+ pour compatibilité avec les vieux serveurs XMLVend
         if hasattr(ssl, "TLSVersion"):
-            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        if hasattr(ssl, "OP_NO_TLSv1_3"):
-            ctx.options |= ssl.OP_NO_TLSv1_3
-        try:
-            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
-        except ssl.SSLError:
-            pass
+            try:
+                ctx.minimum_version = ssl.TLSVersion.TLSv1
+            except (AttributeError, ssl.SSLError):
+                # TLSv1 peut être désactivé à la compile — fallback TLS 1.2
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        # OpenSSL 3.0: autoriser la renégociation legacy (vieux serveurs Java/C++)
+        if hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"):
+            ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT
+        # Algorithmes très permissifs pour serveurs legacy
+        for ciphers in ("ALL:!NULL:!eNULL:@SECLEVEL=0", "DEFAULT:@SECLEVEL=0"):
+            try:
+                ctx.set_ciphers(ciphers)
+                break
+            except ssl.SSLError:
+                continue
         ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
         # DEV: pas de vérif serveur; PROD: fournissez un CA bundle (session.verify=...).
         ctx.check_hostname = False
@@ -501,7 +510,7 @@ async def trial_credit_vend_request(request: _ReqModel):
         })
 
 # -----------------------------------------------------------------------------
-# Utilitaire
+# Utilitaires
 # -----------------------------------------------------------------------------
 @simulateur_router.get("/")
 async def root():
@@ -513,3 +522,40 @@ async def root():
         "wsdl": SOAP_WSDL_URL,
         "xmlvend_endpoint_env": XMLVEND_ENDPOINT or None
     }
+
+
+@simulateur_router.get("/cert-info")
+async def cert_info():
+    """Diagnostic: informations sur le certificat PFX (expiry, sujet, émetteur)."""
+    from datetime import timezone
+    if not CERTIFICATE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Fichier PFX introuvable")
+    try:
+        with open(CERTIFICATE_PATH, "rb") as f:
+            pfx = f.read()
+        key, cert, add_certs = load_key_and_certificates(pfx, CERTIFICATE_PASSWORD.encode("utf-8"))
+        now = datetime.now(timezone.utc)
+
+        def cert_summary(c):
+            not_after = c.not_valid_after_utc if hasattr(c, "not_valid_after_utc") else c.not_valid_after.replace(tzinfo=timezone.utc)
+            not_before = c.not_valid_before_utc if hasattr(c, "not_valid_before_utc") else c.not_valid_before.replace(tzinfo=timezone.utc)
+            expired = now > not_after
+            return {
+                "subject": c.subject.rfc4514_string(),
+                "issuer": c.issuer.rfc4514_string(),
+                "not_before": not_before.isoformat(),
+                "not_after": not_after.isoformat(),
+                "expired": expired,
+                "days_remaining": (not_after - now).days if not expired else None,
+            }
+
+        return {
+            "leaf_cert": cert_summary(cert),
+            "chain_certs": [cert_summary(c) for c in (add_certs or [])],
+            "chain_length": 1 + len(add_certs or []),
+            "private_key_present": key is not None,
+            "openssl_version": getattr(ssl, "OPENSSL_VERSION", None),
+            "legacy_server_connect_available": hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"error": str(e), "error_type": type(e).__name__})
