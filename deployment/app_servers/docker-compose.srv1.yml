@@ -1,12 +1,39 @@
 # Configuration Docker Compose pour SRV-MOBAPP1 (10.101.1.210)
-# Rôles : API, Redis Master, RabbitMQ Node 1, MinIO Node 2
+# Rôles : API, Redis MASTER (broker + cache), Celery worker_high, Nginx
+#
+# Architecture 2 serveurs d'application :
+#   SRV-MOBAPP1 (ce fichier) : Redis Master, worker priorité haute (urgent + high_priority)
+#   SRV-MOBAPP2              : Redis Replica, worker toutes queues (fallback si SRV1 tombe)
+#   SRV-MOBAPPBD (10.101.1.212) : PostgreSQL + MinIO (géré séparément)
+#   VIP Keepalived (10.101.1.250) : bascule VRRP actif/passif
 
 version: '3.8'
 
 services:
-  # --- Application ---
+
+  # ─── Infrastructure ──────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: samaconso_redis
+    # appendonly : persistance AOF (survie aux redémarrages)
+    # replica-announce-ip : IP annoncée aux réplicas pour la réplication
+    command: redis-server --appendonly yes --replica-announce-ip 10.101.1.210
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # ─── Application ─────────────────────────────────────────────────────────────
+
   api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     image: samaconso_api:latest
@@ -17,71 +44,53 @@ services:
     env_file:
       - .env.production
     environment:
-      - DATABASE_URL=postgresql://samaconso_app:S3N3l3c2025!@10.101.1.212:6432/samaconso
+      # DATABASE_URL fourni par .env.production (ne pas mettre de mot de passe ici)
       - REDIS_URL=redis://10.101.1.210:6379/0
-      - RABBITMQ_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
-      - CELERY_BROKER_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
+      - CELERY_BROKER_URL=redis://10.101.1.210:6379/0
       - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
-      - MINIO_ENDPOINT=10.101.1.212:9000,10.101.1.210:9000,10.101.1.211:9000
+      - MINIO_ENDPOINT=10.101.1.212:9000
       - SERVER_NAME=SRV-MOBAPP1
     volumes:
       - ./uploaded_files:/app/uploaded_files
       - ./logs:/app/logs
       - ./app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:ro
-    restart: unless-stopped
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "srv-mobappbd:10.101.1.212"
       - "srv-mobapp2:10.101.1.211"
       - "srv-asreports:10.101.2.87"
       - "srv-commercial:10.101.3.243"
-      - "rabbitmq2:10.101.1.211"
+    restart: unless-stopped
 
   worker_high:
     image: samaconso_api:latest
     container_name: samaconso_worker_high
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q urgent,high -n worker_high@%h
+    # Queues prioritaires : urgent + high_priority
+    # worker_low sur SRV2 écoute aussi ces queues → fallback automatique si SRV1 tombe
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q urgent,high_priority -n worker_high@%h
     env_file: .env.production
-    restart: unless-stopped
-
-  # --- Infrastructure ---
-  redis:
-    image: redis:7-alpine
-    container_name: samaconso_redis
-    command: redis-server --appendonly yes --replica-announce-ip 10.101.1.210
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: always
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: samaconso_rabbitmq
-    hostname: rabbitmq1
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-      - "4369:4369"
-      - "25672:25672"
     environment:
-     # - RABBITMQ_ERLANG_COOKIE=EHBYGLBHLKVWZBBTIPDK
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=S3N3l3c2025!
-    volumes:
-      #- rabbitmq_data:/var/lib/rabbitmq
-      - ./rabbitmq_data:/var/lib/rabbitmq
-      - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
-    
+      # DATABASE_URL fourni par .env.production
+      - REDIS_URL=redis://10.101.1.210:6379/0
+      - CELERY_BROKER_URL=redis://10.101.1.210:6379/0
+      - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "srv-mobappbd:10.101.1.212"
       - "srv-mobapp2:10.101.1.211"
       - "srv-asreports:10.101.2.87"
       - "srv-commercial:10.101.3.243"
-      - "rabbitmq2:10.101.1.211"
-
-    restart: always
+    restart: unless-stopped
 
 volumes:
   redis_data:
-  rabbitmq_data:
