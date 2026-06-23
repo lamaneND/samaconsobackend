@@ -10,7 +10,8 @@ from app.cache_utils import (
     flush_cache_by_pattern,
     cache_health_check
 )
-from app.rabbitmq import publish_message
+from app.cache import get_redis
+from app.config import REDIS_PUBLISH_QUEUE
 from app.database import get_db_samaconso
 
 
@@ -31,8 +32,9 @@ async def get_cache(key: str = Query(...)):
 
 @utils_router.post("/publish")
 async def publish(msg: str = Query(...)):
-    await publish_message(msg.encode("utf-8"))
-    return {"published": True}
+    client = get_redis()
+    await client.rpush(REDIS_PUBLISH_QUEUE, msg)
+    return {"published": True, "queue": REDIS_PUBLISH_QUEUE}
 
 
 # Endpoints de monitoring du cache

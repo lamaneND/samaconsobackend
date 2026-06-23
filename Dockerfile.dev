@@ -1,0 +1,6 @@
+# Image de développement : on repart de l'image existante (drivers ODBC déjà installés)
+# et on écrase uniquement le code applicatif avec les dernières modifications
+FROM samaconso_api:with-fixes
+
+COPY app/ /app/app/
+COPY alembic/ /app/alembic/

@@ -100,55 +100,61 @@ def login_with_oauth2(
 
 @auth_router.post("/token-json", summary="Login with json")
 def login_with_json(
-    json_data: UserLoginSchema = Body(...),
-    db: Session = Depends(get_db_samaconso)
+    json_data: UserLoginRequestSchema = Body(...),
+    db: Session = Depends(get_db_samaconso),
+    request: Request = None
 ):
-    #logger.debug(f"Received json data: username={json_data.username}, password={json_data.password}")
-
     username = json_data.username
     password = json_data.password
+    client_ip = request.client.host if request and request.client else "unknown"
+
+    logger.info(f"🔐 Login attempt | Username: {username[:20] if username else ''}... | Method: JSON | IP: {client_ip}")
+    log_api_request("/auth/token-json", "POST")
 
     if username and password:
         # Authenticate with login & password
-        user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
+        user = db.query(User).filter(or_(User.login == username, User.phoneNumber == username)).first()
         if not user:
-        
+            logger.warning(f"⚠️ Login failed - User not found | Username: {username} | IP: {client_ip}")
+            log_security("User not found", None, client_ip, f"Username: {username}, Method: JSON")
             raise HTTPException(status_code=404, detail="Compte inexistant")
         if user.login == username:
-        # Password-based authentication
+            # Password-based authentication
             if not verify_password(password, user.password):
-             #   logger.debug("Password verification failed")
+                logger.warning(f"⚠️ Login failed - Invalid password | User ID: {user.id} | IP: {client_ip}")
+                log_security("Invalid password", user.id, client_ip, f"Username: {username}, Method: JSON")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         elif user.phoneNumber == username:
-        # Code-based authentication
+            # Code-based authentication
             if not verify_password(password, user.codePin):
-              #  logger.debug("Code verification failed")
+                logger.warning(f"⚠️ Login failed - Invalid PIN | User ID: {user.id} | IP: {client_ip}")
+                log_security("Invalid PIN code", user.id, client_ip, f"Phone: {username}, Method: JSON")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            
         else:
-           # logger.debug("Unexpected login condition")
+            logger.error(f"❌ Login failed - Unexpected condition | User ID: {user.id} | IP: {client_ip}")
+            log_security("Unexpected login condition", user.id, client_ip, f"Username: {username}, Method: JSON")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid login method")
-    
-    # Générer la paire access + refresh token
+
+        # Générer la paire access + refresh token
         access_token, refresh_token = create_token_pair(user.id)
-        
-        # Récupérer device_model et fcm_token si fournis
-        device_model = getattr(json_data, 'device_model', None)
-        fcm_token = getattr(json_data, 'fcm_token', None)
-        
-        
+
         # Sauvegarder le refresh token en base (hashé)
-        save_refresh_token(db, user.id, refresh_token, device_model=device_model, fcm_token=fcm_token)
-        user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
+        save_refresh_token(db, user.id, refresh_token, device_model=json_data.device_model, fcm_token=json_data.fcm_token)
+
+        logger.info(f"✅ Login successful | User ID: {user.id} | Username: {username} | IP: {client_ip}")
+        log_security("Successful login", user.id, client_ip, f"Method: JSON, Username: {username}")
+
         return {
             "status_code": status.HTTP_200_OK,
-            "user": user,
+            "user": UserResponseSchema.model_validate(user).model_dump(),
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"
         }
 
     else:
+        logger.error(f"❌ Login failed - Missing credentials | IP: {client_ip}")
+        log_security("Missing credentials", None, client_ip, "Method: JSON")
         raise HTTPException(status_code=400, detail="Invalid login method")
 
 
@@ -208,7 +214,7 @@ def login_with_json_v2(
         user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
         return {
             "status_code": status.HTTP_200_OK,
-            "user": user,
+            "user": UserResponseSchema.model_validate(user).model_dump(),
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"
@@ -261,7 +267,7 @@ def login_with_ldap(
         user = db.query(User).filter(or_(User.login == username,User.phoneNumber==username)).first()
         return {
             "status_code": status.HTTP_200_OK,
-            "user": user,
+            "user": UserResponseSchema.model_validate(user).model_dump(),
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"

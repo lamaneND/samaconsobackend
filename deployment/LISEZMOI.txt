@@ -1,0 +1,89 @@
+======================================================================
+  DÉPLOIEMENT SAMACONSO — Guide rapide
+======================================================================
+
+Ce dossier contiendra les artifacts de déploiement après le build.
+
+CONTENU ATTENDU (après build_and_package.bat) :
+  samaconso_api.tar      Image Docker API (inclut ODBC, Firebase, code)
+  redis_7_alpine.tar     Image Docker Redis 7-alpine
+  deploy_srv1.sh         Script de déploiement pour SRV-MOBAPP1
+  deploy_srv2.sh         Script de déploiement pour SRV-MOBAPP2
+  LISEZMOI.txt           Ce fichier
+
+----------------------------------------------------------------------
+ÉTAPE 1 — BUILD (sur la machine de développement, Windows)
+----------------------------------------------------------------------
+
+  Double-cliquer build_and_package.bat
+  (ou depuis le terminal : .\build_and_package.bat)
+
+  → Génère samaconso_api.tar (~300-600 MB) et redis_7_alpine.tar (~40 MB)
+
+----------------------------------------------------------------------
+ÉTAPE 2 — SERVIR LES FICHIERS (sur la machine de développement)
+----------------------------------------------------------------------
+
+  cd deploy
+  python -m http.server 8888
+
+  Garder ce terminal ouvert pendant tout le déploiement.
+  Votre IP sur le réseau Senelec : ipconfig | findstr "IPv4"
+
+----------------------------------------------------------------------
+ÉTAPE 3 — DÉPLOYER SRV-MOBAPP1 (10.101.1.210) — EN PREMIER
+----------------------------------------------------------------------
+
+  Sur SRV1 via SSH :
+
+    wget http://<VOTRE_IP>:8888/deploy_srv1.sh
+    chmod +x deploy_srv1.sh
+    sudo ./deploy_srv1.sh <VOTRE_IP> 8888
+
+  Attendre que SRV1 soit stable (API répond sur /health) avant de passer à SRV2.
+
+----------------------------------------------------------------------
+ÉTAPE 4 — DÉPLOYER SRV-MOBAPP2 (10.101.1.211) — EN SECOND
+----------------------------------------------------------------------
+
+  Sur SRV2 via SSH :
+
+    wget http://<VOTRE_IP>:8888/deploy_srv2.sh
+    chmod +x deploy_srv2.sh
+    sudo ./deploy_srv2.sh <VOTRE_IP> 8888
+
+----------------------------------------------------------------------
+VÉRIFICATIONS POST-DÉPLOIEMENT
+----------------------------------------------------------------------
+
+  SRV1 API health   : curl http://10.101.1.210:8000/health
+  SRV2 API health   : curl http://10.101.1.211:8000/health
+  VIP Keepalived    : curl http://10.101.1.250/health
+  Flower (Celery)   : http://10.101.1.210:5555
+    → Vérifier les 4 queues : urgent, high_priority, normal, low_priority
+
+  Réplication Redis :
+    docker exec samaconso_redis_replica redis-cli info replication
+
+  Failover test :
+    Sur SRV1 : sudo systemctl stop keepalived
+    → Vérifier que 10.101.1.250 bascule vers SRV2
+    Sur SRV1 : sudo systemctl start keepalived
+
+----------------------------------------------------------------------
+PROMOTION REDIS EN CAS DE PANNE SRV1 (procédure manuelle)
+----------------------------------------------------------------------
+
+  Si SRV1 est en panne et ne peut pas être restauré :
+
+    Sur SRV2 :
+      docker exec samaconso_redis_replica redis-cli REPLICAOF NO ONE
+
+    Puis mettre à jour /opt/samaconso/.env.production sur SRV2 :
+      CELERY_BROKER_URL=redis://10.101.1.211:6379/0
+      CELERY_RESULT_BACKEND=redis://10.101.1.211:6379/0
+
+    Redémarrer API et worker :
+      docker restart samaconso_api samaconso_worker_low
+
+======================================================================

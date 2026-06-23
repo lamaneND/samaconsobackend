@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserBaseSchema(BaseModel):
@@ -48,8 +48,11 @@ class UserUpdateCodePinSchema(BaseModel):
 
 class UserResponseSchema(UserBaseSchema):
     id:int
-    created_at:str
-    updated_at:str
+    created_at:Optional[datetime] = None
+    updated_at:Optional[datetime] = None
+    # Champs sensibles exclus de la réponse API (jamais renvoyés au client)
+    codePin: Optional[str] = Field(default=None, exclude=True)
+    password: Optional[str] = Field(default=None, exclude=True)
 
     class Config:
         from_attributes = True

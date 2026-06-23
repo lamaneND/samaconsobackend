@@ -1,5 +1,21 @@
+import os as _os_early
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Charger .env depuis la racine du projet (deux niveaux au-dessus de app/config.py)
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV_FILE, override=False)  # override=False : les vars déjà définies dans l'OS ont priorité
+
 ### JWT Keys
-SECRET_KEY = "$3?N2LEC123"  
+# SECRET_KEY doit être défini dans les variables d'environnement — JAMAIS en dur ici
+# En prod : définir SECRET_KEY dans .env.production
+# En dev  : définir SECRET_KEY dans .env
+SECRET_KEY = _os_early.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "Variable d'environnement SECRET_KEY manquante. "
+        "Définissez-la dans .env ou .env.production avant de démarrer l'API."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7  # Refresh token valide 7 jours
@@ -18,7 +34,13 @@ LDAP_DOMAIN=""
 #LDAP_SEARCH_USER ="CN=service.samaconso,CN=Users,DC=electricite,DC=sn"
 LDAP_SEARCH_USER ="CN=Service Sama Conso,CN=Users,DC=electricite,DC=sn"
 #LDAP_SEARCH_USER ="service.samaconso"
-LDAP_SEARCH_PASSWORD ="!!=++PT25@--ZmA"
+# LDAP_SEARCH_PASSWORD doit être défini dans les variables d'environnement
+LDAP_SEARCH_PASSWORD = _os_early.getenv("LDAP_SEARCH_PASSWORD")
+if not LDAP_SEARCH_PASSWORD:
+    raise RuntimeError(
+        "Variable d'environnement LDAP_SEARCH_PASSWORD manquante. "
+        "Définissez-la dans .env ou .env.production avant de démarrer l'API."
+    )
 # LDAP_SEARCH_USER = "CN=Service Appli ODM,CN=Users,DC=electricite,DC=sn"
 # LDAP_SEARCH_PASSWORD = "PwD@0dM221!!svC"
 
@@ -122,15 +144,13 @@ CACHE_TTL = {
     "EXTERNAL_APIs": 30,        # SIC, Postpaid
 }
 
-# RabbitMQ Configuration
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
-RABBITMQ_DEFAULT_EXCHANGE = os.getenv("RABBITMQ_DEFAULT_EXCHANGE", "")  # default direct exchange
-RABBITMQ_DEFAULT_QUEUE = os.getenv("RABBITMQ_DEFAULT_QUEUE", "samaconso.queue")
-
 # Celery Configuration
-# RabbitMQ as broker (message queue) - Redis as result backend (cache)
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", RABBITMQ_URL)
+# Redis comme broker ET backend (plus de RabbitMQ — voir BUG-003 dans docs/ERREURS.md)
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
+
+# File de publication générique (utilisée par /utils/publish)
+REDIS_PUBLISH_QUEUE = os.getenv("REDIS_PUBLISH_QUEUE", "samaconso.queue")
 
 # MinIO Configuration
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")

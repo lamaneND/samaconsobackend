@@ -1,12 +1,12 @@
 from celery import Celery
 from app.config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
-# Configuration Celery avec RabbitMQ comme broker et Redis comme backend
-# RabbitMQ: Meilleure gestion des queues, priorités et routage
-# Redis: Stockage rapide des résultats
+# Configuration Celery avec Redis comme broker ET backend de résultats
+# RabbitMQ a été retiré de l'architecture (2026-06-09) — voir BUG-003 dans docs/ERREURS.md
+# Redis simplifie l'architecture : un seul service pour cache, broker et résultats Celery
 celery_app = Celery(
     "samaconso_notifications",
-    broker=CELERY_BROKER_URL,      # RabbitMQ comme broker principal
+    broker=CELERY_BROKER_URL,      # Redis comme broker (redis://host:6379/0)
     backend=CELERY_RESULT_BACKEND,  # Redis pour les résultats
     include=[
         "app.tasks.test_tasks",          # Tâches de test basiques
@@ -16,7 +16,7 @@ celery_app = Celery(
     ]
 )
 
-# Configuration optimisée pour les notifications avec RabbitMQ
+# Configuration optimisée pour les notifications avec Redis comme broker
 celery_app.conf.update(
     # Performance
     worker_prefetch_multiplier=4,
@@ -33,11 +33,11 @@ celery_app.conf.update(
     task_max_retries=3,
     result_expires=3600,
 
-    # RabbitMQ spécifique
+    # Connexion broker (Redis)
     broker_connection_retry_on_startup=True,
     broker_connection_max_retries=10,
-    broker_heartbeat=30,
-    broker_pool_limit=10,
+    # broker_heartbeat : paramètre AMQP/RabbitMQ ignoré par Redis — retiré
+    # broker_pool_limit : non applicable avec Redis transport
     
     # Routage PRODUCTION pour toutes les tâches
     task_routes={

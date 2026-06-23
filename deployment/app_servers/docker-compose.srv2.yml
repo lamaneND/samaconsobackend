@@ -1,12 +1,44 @@
 # Configuration Docker Compose pour SRV-MOBAPP2 (10.101.1.211)
-# Rôles : API, Redis Replica, RabbitMQ Node 2, MinIO Node 3
+# Rôles : API, Redis REPLICA (lecture), Celery worker_low (toutes queues)
+#
+# Stratégie worker_low — écoute les 4 queues :
+#   - En fonctionnement normal : traite normal + low_priority
+#   - Si SRV1 tombe : absorbe aussi urgent + high_priority (failover automatique)
+#   Celery distribue les tâches sur les workers disponibles quel que soit le serveur.
+#
+# Stratégie Redis :
+#   - Le broker Celery pointe toujours sur le MASTER (10.101.1.210)
+#   - La replica locale peut servir le cache lecture (REDIS_URL → 127.0.0.1:6379)
+#   - Si SRV1 tombe : promo manuelle → redis-cli -h 127.0.0.1 REPLICAOF NO ONE
+#                    puis mettre à jour CELERY_BROKER_URL dans .env.production
 
 version: '3.8'
 
 services:
-  # --- Application ---
+
+  # ─── Infrastructure ──────────────────────────────────────────────────────────
+
+  redis_replica:
+    image: redis:7-alpine
+    container_name: samaconso_redis_replica
+    # Réplication depuis le Master sur SRV1
+    # replica-announce-ip : IP annoncée au Master pour le suivi de replication
+    command: redis-server --replicaof 10.101.1.210 6379 --replica-announce-ip 10.101.1.211
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # ─── Application ─────────────────────────────────────────────────────────────
+
   api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     image: samaconso_api:latest
@@ -17,71 +49,55 @@ services:
     env_file:
       - .env.production
     environment:
-      - DATABASE_URL=postgresql://samaconso_app:S3N3l3c2025!@10.101.1.212:6432/samaconso
-      # Pointe vers le Redis Master sur SRV1
-      - REDIS_URL=redis://10.101.1.210:6379/0
-      # Cluster RabbitMQ
-      - RABBITMQ_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
-      - CELERY_BROKER_URL=amqp://admin:S3N3l3c2025!@10.101.1.210:5672/
+      # DATABASE_URL fourni par .env.production (ne pas mettre de mot de passe ici)
+      # REDIS_URL → replica locale pour les lectures cache (plus performant)
+      - REDIS_URL=redis://127.0.0.1:6379/0
+      # CELERY_BROKER_URL → Master SRV1 (écriture broker, toujours le Master)
+      - CELERY_BROKER_URL=redis://10.101.1.210:6379/0
       - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
-      - MINIO_ENDPOINT=10.101.1.212:9000,10.101.1.210:9000,10.101.1.211:9000
+      - MINIO_ENDPOINT=10.101.1.212:9000
       - SERVER_NAME=SRV-MOBAPP2
     volumes:
       - ./uploaded_files:/app/uploaded_files
       - ./logs:/app/logs
       - ./app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:/app/app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json:ro
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      redis_replica:
+        condition: service_healthy
     extra_hosts:
       - "srv-mobappbd:10.101.1.212"
       - "srv-mobapp1:10.101.1.210"
-      - "rabbitmq1:10.101.1.210"
       - "srv-asreports:10.101.2.87"
       - "srv-commercial:10.101.3.243"
+    restart: unless-stopped
 
   worker_low:
     image: samaconso_api:latest
     container_name: samaconso_worker_low
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q default,low -n worker_low@%h
+    # Écoute les 4 queues : en fonctionnement normal, il priorise normal + low_priority
+    # En cas de panne SRV1, il absorbe aussi urgent + high_priority automatiquement
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q urgent,high_priority,normal,low_priority -n worker_low@%h
     env_file: .env.production
-    restart: unless-stopped
-
-  # --- Infrastructure ---
-  redis_replica:
-    image: redis:7-alpine
-    container_name: samaconso_redis_replica
-    # Réplication du Master sur SRV1
-    command: redis-server --replicaof 10.101.1.210 6379 --replica-announce-ip 10.101.1.211
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: always
-
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: samaconso_rabbitmq
-    hostname: rabbitmq2
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-      - "4369:4369"
-      - "25672:25672"
     environment:
-     # - RABBITMQ_ERLANG_COOKIE=EHBYGLBHLKVWZBBTIPDK
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=S3N3l3c2025!
-    volumes:
-      #- rabbitmq_data:/var/lib/rabbitmq
-      - ./rabbitmq_data:/var/lib/rabbitmq
-      - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
+      # DATABASE_URL fourni par .env.production
+      - REDIS_URL=redis://127.0.0.1:6379/0
+      - CELERY_BROKER_URL=redis://10.101.1.210:6379/0
+      - CELERY_RESULT_BACKEND=redis://10.101.1.210:6379/0
+    depends_on:
+      redis_replica:
+        condition: service_healthy
     extra_hosts:
       - "srv-mobappbd:10.101.1.212"
       - "srv-mobapp1:10.101.1.210"
-      - "rabbitmq1:10.101.1.210"
       - "srv-asreports:10.101.2.87"
       - "srv-commercial:10.101.3.243"
-    restart: always
+    restart: unless-stopped
 
 volumes:
   redis_data:
-  rabbitmq_data:

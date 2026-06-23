@@ -89,6 +89,9 @@ class SamaConsoLogger:
         # Handler console avec couleurs (development)
         if self.environment == "development":
             console_handler = logging.StreamHandler(sys.stdout)
+            # Forcer UTF-8 sur Windows (cp1252 par défaut ne supporte pas les emojis)
+            if hasattr(console_handler.stream, 'reconfigure'):
+                console_handler.stream.reconfigure(encoding='utf-8', errors='replace')
             console_handler.setLevel(logging.DEBUG)
             console_formatter = ColoredFormatter(LOG_FORMAT, LOG_DATE_FORMAT)
             console_handler.setFormatter(console_formatter)
