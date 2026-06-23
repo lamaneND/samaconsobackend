@@ -34,7 +34,8 @@ SOAP_SERVICE_NAME = "TrialCreditVendRequest"
 CERTIFICATE_DIR = Path(__file__).parent
 
 CERTIFICATE_PATH = CERTIFICATE_DIR / "487.pfx"
-CERTIFICATE_PASSWORD = "Snlc@221...Pwd"
+# CERTIFICATE_PASSWORD = "Snlc@221...Pwd"
+CERTIFICATE_PASSWORD = ".9rr6ZbY#5-n5J"
 
 
 # Optionnel: override explicite (FQDN/URL de SoapUI si différent)
