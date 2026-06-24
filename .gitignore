@@ -116,3 +116,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 # app/samaconso-firebase-adminsdk-fbsvc-ae9b8fc3c0.json
+
+# Images Docker (trop lourdes pour GitHub)
+deployment/packages/*.tar
+deploy/*.tar

@@ -1,0 +1,10 @@
+# Image dérivée — mise à jour du code uniquement (pas de réinstallation des dépendances)
+# Utilise l'image locale existante comme base
+FROM samaconso_api:latest
+
+USER root
+
+# Copie uniquement le code applicatif mis à jour
+COPY --chown=appuser:appuser app/ /app/app/
+
+USER appuser
