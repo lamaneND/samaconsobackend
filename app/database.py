@@ -113,11 +113,11 @@ def get_db_connection_postpaid_customer():
         print(f"Error connecting to database: {e}")
         return None
 
-# ===== SERVEUR 4 : AvisDB (Suivi Abonnements) =====
+# ===== SERVEUR 4 : BI_ODS (Suivi Abonnements - table AVIS_ETAPES_HANA) =====
 conn_str_avis = (
     "DRIVER={ODBC Driver 18 for SQL Server};"
     "SERVER=srv-asreports;"
-    "DATABASE=AvisDB;"
+    "DATABASE=BI_ODS;"
     "UID=stagiaireddes;"
     "PWD=Senelec123;"
     "TrustServerCertificate=yes;"
