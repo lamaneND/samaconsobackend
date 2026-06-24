@@ -19,6 +19,8 @@ class ClientSchema(BaseModel):
 
 class AvisResponseSchema(BaseModel):
     num_avis: str
+    statut_avis: Optional[str] = None
+    dt_derniere_maj: Optional[str] = None
     client: ClientSchema
     etapes: List[EtapeSchema]
     nb_etapes_terminees: int
