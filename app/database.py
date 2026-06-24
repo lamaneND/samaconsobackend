@@ -101,7 +101,7 @@ conn_str2 = (
     f"SERVER={server2};"
     f"DATABASE={database2};"
     f"UID={username2};"
-    f"PWD={password2}"
+    f"PWD={password2};"
     f"TrustServerCertificate=yes;"
 )
 
