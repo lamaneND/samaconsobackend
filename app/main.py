@@ -25,6 +25,7 @@ from app.routers.seuil_tarif_routers import seuil_tarif_router
 # from app.routers.simulateur_routers_v3 import simulateur_router_v3
 from app.routers.simulateur_routers import simulateur_router
 from app.routers.logs_routers import logs_router
+from app.routers.abonnement_routers import abonnement_router
 from app.firebase import *
 from app.cache import init_redis, close_redis, get_redis
 from app.routers.utils_routers import utils_router
@@ -127,6 +128,7 @@ app.include_router(seuil_tarif_router)
 app.include_router(simulateur_router)
 app.include_router(utils_router)
 app.include_router(logs_router)
+app.include_router(abonnement_router)
 
 
 @app.on_event("startup")

@@ -107,6 +107,10 @@ CACHE_KEYS = {
     "POSTPAID_BILLS_BY_METER": "postpaid:bills:meter:{meter}",
     "SIC_CUSTOMER_BY_METER": "sic:customer:meter:{meter}",
     "SIC_CUSTOMER_BY_PHONE": "sic:customer:phone:{phone}",
+
+    # Abonnement - suivi des demandes d'abonnement
+    "AVIS_BY_NUM": "abonnement:avis:{num_avis}:{telephone}",
+    "AVIS_BY_NUM_ONLY": "abonnement:avis:{num_avis}",
     
     # Seuils & Tarifs - données de configuration
     "SEUIL_TARIF_ALL": "seuil_tarif:all",
@@ -142,6 +146,9 @@ CACHE_TTL = {
     
     # Données externes - 30 secondes
     "EXTERNAL_APIs": 30,        # SIC, Postpaid
+
+    # Suivi abonnement - 5 minutes
+    "AVIS": 300,                # étapes d'un avis d'abonnement
 }
 
 # Celery Configuration
