@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, status
-from app.database import get_db_connection_avis
+from app.database import get_db_connection_avis,get_db_connection_postpaid
 from app.schemas.abonnement_schemas import AvisResponseSchema, ClientSchema, EtapeSchema
 from app.cache import cache_get, cache_set
 from app.config import CACHE_KEYS, CACHE_TTL
