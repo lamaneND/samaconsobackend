@@ -112,3 +112,21 @@ def get_db_connection_postpaid_customer():
     except pyodbc.Error as e:
         print(f"Error connecting to database: {e}")
         return None
+
+# ===== SERVEUR 4 : AvisDB (Suivi Abonnements) =====
+conn_str_avis = (
+    "DRIVER={ODBC Driver 18 for SQL Server};"
+    "SERVER=srv-asreports;"
+    "DATABASE=AvisDB;"
+    "UID=stagiaireddes;"
+    "PWD=Senelec123;"
+    "TrustServerCertificate=yes;"
+)
+
+def get_db_connection_avis():
+    try:
+        conn = pyodbc.connect(conn_str_avis)
+        return conn
+    except pyodbc.Error as e:
+        print(f"Error connecting to AvisDB: {e}")
+        return None
