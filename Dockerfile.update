@@ -1,10 +1,14 @@
-# Image dérivée — mise à jour du code uniquement (pas de réinstallation des dépendances)
-# Utilise l'image locale existante comme base
+# Image dérivée — mise à jour du code + installation des nouvelles dépendances
+# Utilise l'image locale existante comme base (pas de réinstallation des drivers SQL/apt)
 FROM samaconso_api:latest
 
 USER root
 
-# Copie uniquement le code applicatif mis à jour
+# Installer python-dotenv depuis le wheel local (pas d'accès internet nécessaire)
+COPY deployment/wheels/python_dotenv-1.2.2-py3-none-any.whl /tmp/
+RUN pip install --no-index /tmp/python_dotenv-1.2.2-py3-none-any.whl
+
+# Copie le code applicatif mis à jour
 COPY --chown=appuser:appuser app/ /app/app/
 
 USER appuser
